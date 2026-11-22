@@ -147,6 +147,12 @@
   .past{display:flex;align-items:center;gap:10px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px}
   .ev-pills{margin:6px 0 0}
   #popResults{scroll-margin-top:96px}
+  .cloud{border:1.5px solid var(--ink);background:#fff;border-radius:99px;font-size:11px;font-weight:700;padding:4px 9px;cursor:pointer;white-space:nowrap;flex:none}
+  .cloud.ok{color:var(--ok);border-color:var(--ok)}
+  .cloud.busy{color:var(--blue);border-color:var(--blue)}
+  .cloud.warn{color:#b3170a;border-color:#b3170a;background:#fff3ef}
+  .hdr-meta{white-space:nowrap}
+  @media(max-width:420px){ header{gap:7px;padding-left:12px;padding-right:12px} .logo{font-size:23px} .logo small{font-size:9px;letter-spacing:1.2px} .hdr-meta{font-size:11px} .cloud{font-size:10px;padding:3px 7px} .stamp{width:34px;height:34px;font-size:11px} }
   /* Nav */
   nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--ink);display:flex;justify-content:space-around;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
   nav button{background:none;border:0;color:#bdb4a6;font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;cursor:pointer;border-radius:10px;flex:1;min-width:0;max-width:110px}
@@ -189,6 +195,7 @@
 <header>
   <div class="logo">NORiKO<small>RECORDS · INVENTARIO</small></div>
   <div class="hdr-meta grow" id="hdrMeta"></div>
+  <button type="button" id="cloudInd" class="cloud" hidden></button>
   <div class="stamp" aria-hidden="true">中古盤</div>
   <div class="band"></div>
 </header>
@@ -368,8 +375,26 @@
     </div>
 
     <div class="card">
+      <h3 class="mt0">Google Sheets</h3>
+      <p class="small muted mt0">Copia en línea de tu inventario, ventas y pop-ups. Todos los dispositivos conectados a la misma hoja ven lo mismo.</p>
+      <label class="f">URL del script (termina en /exec)</label>
+      <input type="text" id="cloudUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <label class="f">Clave</label>
+      <input type="password" id="cloudKey" autocomplete="off">
+      <button class="btn primary block" type="button" id="cloudConnectBtn" style="margin-top:12px">Conectar y sincronizar</button>
+      <div id="cloudConnected" hidden>
+        <div class="row wrap" style="margin-top:8px">
+          <button class="btn" type="button" id="cloudNow">Sincronizar ahora</button>
+          <a class="btn" id="cloudOpen" target="_blank" rel="noopener" hidden>Abrir mi hoja</a>
+          <button class="btn ghost" type="button" id="cloudOff">Desconectar</button>
+        </div>
+      </div>
+      <div id="cloudInfo" class="small" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
       <h3 class="mt0">Respaldo</h3>
-      <p class="small muted mt0">Los datos viven en este navegador. Descarga un respaldo seguido, sobre todo después de cada pop-up. Con el mismo archivo puedes pasar el inventario a otro teléfono o computadora.</p>
+      <p class="small muted mt0">Si no usas Google Sheets, los datos viven solo en este navegador: descarga un respaldo después de cada pop-up. Con el mismo archivo puedes pasar el inventario a otro teléfono o computadora.</p>
       <div class="row wrap">
         <button class="btn ink" id="expJson">Descargar respaldo (.json)</button>
         <label class="btn">Restaurar respaldo<input type="file" accept=".json,application/json" id="impJson" hidden></label>
@@ -544,21 +569,22 @@ const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-const APP_VERSION = 'v3 · 22 nov 2026';
-function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null}; }
+const APP_VERSION = 'v4 · 22 nov 2026';
+function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null, cloud:{url:'', key:'', lastSync:null, sheetUrl:'', deleted:[]}}; }
 function load(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
     if(!raw) return blank();
     const d = JSON.parse(raw);
     const b = blank();
-    return {...b, ...d, settings:{...b.settings, ...(d.settings||{})}, items:Array.isArray(d.items)?d.items:[], events:Array.isArray(d.events)?d.events:[]};
+    return {...b, ...d, settings:{...b.settings, ...(d.settings||{})}, items:Array.isArray(d.items)?d.items:[], events:Array.isArray(d.events)?d.events:[], cloud:{...b.cloud, ...(d.cloud||{})}};
   }catch(e){ return blank(); }
 }
-function save(){
+function saveLocal(){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch(e){ toast('No se pudo guardar en este navegador', true); }
 }
+function save(){ saveLocal(); scheduleCloud(); }
 if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
 
 /* ---------- Utilidades ---------- */
@@ -625,11 +651,11 @@ async function dgAdd(it){
   const u = state.settings.username, f = state.settings.folderId || 1;
   const d = await dg(`${collPath(u,f)}/releases/${it.releaseId}`, {}, 'POST');
   if(!d || !d.instance_id) throw new Error('Discogs no confirmó el alta en la colección.');
-  it.dgInstance = d.instance_id; it.dgFolder = f; it.dgUser = u; it.dgSync = 'ok';
+  it.dgInstance = d.instance_id; it.dgFolder = f; it.dgUser = u; it.dgSync = 'ok'; touch(it);
 }
 async function dgRemove(it){
   await dg(`${collPath(it.dgUser || state.settings.username, it.dgFolder || 1)}/releases/${it.releaseId}/instances/${it.dgInstance}`, {}, 'DELETE');
-  it.dgInstance = null; it.dgSync = 'ok';
+  it.dgInstance = null; it.dgSync = 'ok'; touch(it);
 }
 function pendingOp(it){
   if(!it.releaseId) return null;
@@ -644,7 +670,7 @@ async function syncItems(items, quiet){
     const op = pendingOp(it); if(!op) continue;
     if(n++) await sleep(1100);           // Discogs permite ~60 consultas por minuto
     try{ op==='add' ? await dgAdd(it) : await dgRemove(it); ok++; lastOp=op; }
-    catch(e){ it.dgSync = op + '-failed'; fail++; lastErr = e.message; }
+    catch(e){ it.dgSync = op + '-failed'; touch(it); fail++; lastErr = e.message; }
     save();
   }
   renderAll();
@@ -703,6 +729,129 @@ async function searchText(artist, title, catno){
 async function marketStats(id){
   try{ return await dg('/marketplace/stats/'+id, {curr_abbr: state.settings.currency}); }
   catch(e){ return null; }
+}
+
+/* ---------- Google Sheets (copia en línea) ---------- */
+// Cada cambio marca el disco o evento como "pendiente" (_dirty). Al sincronizar se envían los pendientes
+// y los borrados; la hoja responde con todo su contenido y aquí se mezcla: gana la versión más reciente.
+const cloudOn = () => !!(state.cloud && state.cloud.url && state.cloud.key);
+function touch(o){ o.updatedAt = new Date().toISOString(); o._dirty = true; }
+function markDeleted(tab, id, wasSynced){ if(wasSynced) state.cloud.deleted.push({tab, id}); }
+const pendingCloud = () => state.items.filter(i=>i._dirty).length + state.events.filter(e=>e._dirty).length + state.cloud.deleted.length;
+const str = v => v==null ? '' : String(v);
+
+function toRow(i){
+  const s = i.sale || {};
+  return {ID:i.id, Artista:i.artist, 'Álbum':i.album, 'Año':i.year, Formato:i.format, 'País':i.country, Sello:i.label||'',
+    'Catálogo':i.catno, 'Código':i.barcode, 'Categoría':catOf(i.category).name, 'Géneros':(i.styles||[]).join(', '),
+    Disco:i.media, Portada:i.sleeve, Obi:i.obi?'Sí':'No', Costo:num(i.cost), Precio:num(i.price), Lote:i.lot, Proveedor:i.supplier,
+    'Fecha compra':i.purchasedAt, Estado:i.status==='sold'?'Vendido':'En stock',
+    'Precio venta':i.sale?num(s.price):'', 'Fecha venta':s.date||'', Pago:s.method||'', Canal:s.channel||'', Evento:s.event||'',
+    'ID evento':s.eventId||'', Comprador:s.buyer||'', 'Notas venta':s.notes||'', 'Venta registrada':s.at||'',
+    Notas:i.notes, 'Discogs release':i.releaseId||'', 'Discogs instancia':i.dgInstance||'', 'Discogs carpeta':i.dgFolder||'',
+    'Discogs usuario':i.dgUser||'', 'Discogs estado':i.dgSync||'', Imagen:i.thumb||'', Creado:i.createdAt||'', Actualizado:i.updatedAt||''};
+}
+function fromRow(r){
+  const c = str(r['Categoría']).toLowerCase();
+  const cat = CATS.find(x=>x.name.toLowerCase()===c || x.id===c) || CATS.find(x=>c && c.startsWith(x.name.split(' ')[0].toLowerCase())) || CATS[0];
+  const sold = /vendid/i.test(str(r.Estado));
+  const n = v => (v===''||v==null) ? null : Number(v);
+  return {id:str(r.ID), artist:str(r.Artista), album:str(r['Álbum']), year:str(r['Año']), format:str(r.Formato)||'CD',
+    country:str(r['País']), label:str(r.Sello), catno:str(r['Catálogo']), barcode:digits(r['Código']), category:cat.id,
+    styles:str(r['Géneros']).split(',').map(x=>x.trim()).filter(Boolean), media:str(r.Disco)||'VG+', sleeve:str(r.Portada)||'VG+',
+    obi:/^s[ií]/i.test(str(r.Obi)), cost:num(r.Costo), price:num(r.Precio), lot:str(r.Lote), supplier:str(r.Proveedor),
+    purchasedAt:str(r['Fecha compra']), notes:str(r.Notas), status: sold?'sold':'stock',
+    sale: sold ? {price:num(r['Precio venta']), date:str(r['Fecha venta'])||today(), method:str(r.Pago), channel:str(r.Canal),
+      event:str(r.Evento), eventId:str(r['ID evento'])||null, buyer:str(r.Comprador), notes:str(r['Notas venta']),
+      at:str(r['Venta registrada'])||str(r.Actualizado)} : null,
+    releaseId:n(r['Discogs release']), dgInstance:n(r['Discogs instancia']), dgFolder:n(r['Discogs carpeta']),
+    dgUser:str(r['Discogs usuario']), dgSync:str(r['Discogs estado'])||null, thumb:str(r.Imagen),
+    createdAt:str(r.Creado), updatedAt:str(r.Actualizado)};
+}
+const evToRow = e => ({ID:e.id, Nombre:e.name, Fecha:e.date, Abierto:e.openedAt||'', Cerrado:e.closedAt||'', Actualizado:e.updatedAt||''});
+const evFromRow = r => ({id:str(r.ID), name:str(r.Nombre), date:str(r.Fecha)||today(), openedAt:str(r.Abierto), closedAt:str(r.Cerrado)||null, updatedAt:str(r.Actualizado)});
+
+function mergeList(local, remote, tab, del){
+  const rmap = new Map(remote.map(x=>[x.id, x])), lmap = new Map(local.map(x=>[x.id, x]));
+  remote.forEach(r=>{
+    const l = lmap.get(r.id);
+    if(!l){ r._synced = true; r._dirty = false; local.push(r); }
+    else if(!l._dirty && (r.updatedAt||'') > (l.updatedAt||'')) Object.assign(l, r, {_synced:true, _dirty:false});
+  });
+  // Fuera: lo borrado en otro dispositivo y lo que quitaste a mano de la hoja.
+  return local.filter(x=>!del.has(tab+':'+x.id) && !(x._synced && !x._dirty && !rmap.has(x.id)));
+}
+function mergeRemote(res){
+  const del = new Set((res.deleted||[]).map(d=>d.tab+':'+d.id));
+  state.items = mergeList(state.items, (res.Inventario||[]).map(fromRow).filter(x=>x.id), 'Inventario', del);
+  state.events = mergeList(state.events, (res.Eventos||[]).map(evFromRow).filter(x=>x.id), 'Eventos', del);
+  if(state.activeEventId && !state.events.some(e=>e.id===state.activeEventId)) state.activeEventId = null;
+}
+
+let cloudBusy = false, cloudAgain = false, cloudTimer = 0, cloudStatus = 'idle', cloudErr = '';
+function scheduleCloud(ms=2500){
+  if(!cloudOn() || !pendingCloud()) return;
+  clearTimeout(cloudTimer); cloudTimer = setTimeout(()=>cloudSync(), ms);
+  renderCloudInd();
+}
+async function cloudSync(){
+  if(!cloudOn()) return {ok:false, error:'Falta conectar Google Sheets.'};
+  if(cloudBusy){ cloudAgain = true; return {ok:false, error:'busy'}; }
+  cloudBusy = true; clearTimeout(cloudTimer); cloudStatus = 'syncing'; renderCloudInd();
+  const sentItems = state.items.filter(i=>i._dirty).map(i=>[i, i.updatedAt]);
+  const sentEvents = state.events.filter(e=>e._dirty).map(e=>[e, e.updatedAt]);
+  const sentDel = state.cloud.deleted.slice();
+  const payload = {key:state.cloud.key, deleted:sentDel,
+    rows:{Inventario:sentItems.map(([i])=>toRow(i)), Eventos:sentEvents.map(([e])=>evToRow(e))}};
+  let result;
+  try{
+    let r;
+    try{ r = await fetch(state.cloud.url, {method:'POST', body:JSON.stringify(payload)}); }
+    catch(e){ throw new Error(navigator.onLine===false ? 'Sin internet. Se enviará cuando vuelva la conexión.' : 'No hubo respuesta de Google. Revisa la URL del script.'); }
+    if(!r.ok) throw new Error('Google respondió con error ' + r.status + '.');
+    let res;
+    try{ res = await r.json(); }catch(e){ throw new Error('Esa URL no es la del script publicado (debe terminar en /exec).'); }
+    if(!res.ok) throw new Error(res.error || 'La hoja respondió con un error.');
+    sentItems.forEach(([i,u])=>{ i._synced = true; if(i.updatedAt===u) i._dirty = false; });
+    sentEvents.forEach(([e,u])=>{ e._synced = true; if(e.updatedAt===u) e._dirty = false; });
+    state.cloud.deleted = state.cloud.deleted.filter(d=>!sentDel.includes(d));
+    mergeRemote(res);
+    state.cloud.lastSync = new Date().toISOString();
+    if(res.sheetUrl) state.cloud.sheetUrl = res.sheetUrl;
+    saveLocal(); cloudStatus = 'ok'; cloudErr = '';
+    renderAll(); if(($('.view.active')||{}).id==='v-set') renderCloud();
+    result = {ok:true, rows:(res.Inventario||[]).length};
+  }catch(e){
+    cloudStatus = navigator.onLine===false ? 'offline' : 'error'; cloudErr = e.message;
+    result = {ok:false, error:e.message};
+  }finally{
+    cloudBusy = false; renderCloudInd();
+    if(cloudAgain){ cloudAgain = false; scheduleCloud(400); }
+  }
+  return result;
+}
+function renderCloudInd(){
+  const el = $('#cloudInd'); if(!el) return;
+  if(!cloudOn()){ el.hidden = true; return; }
+  el.hidden = false;
+  const p = pendingCloud();
+  const [txt, cls] = cloudStatus==='syncing' ? ['Sincronizando…','busy']
+    : cloudStatus==='offline' ? [`Sin internet${p?` · ${p} pendientes`:''}`,'warn']
+    : cloudStatus==='error' ? ['Error con Sheets','warn']
+    : p ? [`${p} sin subir`,'busy'] : ['En línea','ok'];
+  el.className = 'cloud ' + cls; el.textContent = '☁ ' + txt;
+  el.title = cloudErr || (state.cloud.lastSync ? 'Última sincronización: ' + new Date(state.cloud.lastSync).toLocaleString('es-MX') : '');
+}
+function renderCloud(){
+  const C = state.cloud;
+  $('#cloudUrl').value = C.url || ''; $('#cloudKey').value = C.key || '';
+  $('#cloudConnected').hidden = !cloudOn();
+  $('#cloudConnectBtn').textContent = cloudOn() ? 'Guardar y sincronizar' : 'Conectar y sincronizar';
+  $('#cloudOpen').hidden = !C.sheetUrl; if(C.sheetUrl) $('#cloudOpen').href = C.sheetUrl;
+  const p = pendingCloud();
+  $('#cloudInfo').innerHTML = !cloudOn() ? '' :
+    `${C.lastSync ? 'Última sincronización: ' + esc(new Date(C.lastSync).toLocaleString('es-MX')) : 'Aún sin sincronizar'}${p ? ` · ${p} cambios por subir` : ''}` +
+    (cloudErr ? `<br><span style="color:#b3170a">${esc(cloudErr)}</span>` : '');
 }
 
 /* ---------- Navegación ---------- */
@@ -1010,7 +1159,7 @@ $('#buyForm').addEventListener('submit', e=>{
   if(!base.artist || !base.album){ toast('Falta artista o álbum', true); return; }
   if(editingId){
     const it = state.items.find(i=>i.id===editingId);
-    Object.assign(it, base, {updatedAt: new Date().toISOString()});
+    Object.assign(it, base); touch(it);
     toast('Disco actualizado');
   }else{
     const qty = Math.max(1, Math.min(200, parseInt($('#bQty').value)||1));
@@ -1018,7 +1167,7 @@ $('#buyForm').addEventListener('submit', e=>{
     for(let k=0;k<qty;k++){
       const it = {id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'', styles: buyDraft.styles||[],
         ...base, status:'stock', sale:null, dgInstance:null, dgSync:null, createdAt:new Date().toISOString()};
-      state.items.push(it); added.push(it);
+      touch(it); state.items.push(it); added.push(it);
     }
     toast(qty>1 ? `${qty} copias agregadas al inventario` : 'Agregado al inventario');
     $('#results').innerHTML=''; $('#localMatch').innerHTML=''; $('#barcodeInput').value='';
@@ -1035,7 +1184,7 @@ $('#bDelete').addEventListener('click', async ()=>{
   if(await confirmBox('Eliminar disco', `Se borra “${it.artist} – ${it.album}” del inventario${it.sale?' junto con su venta':''}${inColl?' y de tu colección de Discogs':''}. No se puede deshacer.`)){
     let warn = '';
     if(inColl){ try{ await dgRemove(it); }catch(e){ warn = ' Quítalo a mano de tu colección en Discogs.'; } }
-    state.items = state.items.filter(i=>i.id!==it.id); save(); renderAll();
+    state.items = state.items.filter(i=>i.id!==it.id); markDeleted('Inventario', it.id, it._synced); save(); renderAll();
     toast('Eliminado.' + warn, !!warn);
   }
 });
@@ -1092,7 +1241,7 @@ $('#sellForm').addEventListener('submit', e=>{
     event:$('#sEvent').value.trim(), buyer:$('#sBuyer').value.trim(), notes:$('#sNotes').value.trim(),
     at: (it.sale && it.sale.at) || new Date().toISOString()};
   it.sale.eventId = it.sale.event ? eventIdFor(it.sale.event) : null;
-  it.status = 'sold';
+  it.status = 'sold'; touch(it);
   save(); $('#sellDlg').close(); renderAll();
   $('#localMatch').innerHTML=''; $('#results').innerHTML=''; $('#barcodeInput').value='';
   toast(`Vendido: ${money(it.sale.price)}`);
@@ -1102,7 +1251,7 @@ $('#sUndo').addEventListener('click', async ()=>{
   const it = state.items.find(i=>i.id===sellingId); if(!it) return;
   $('#sellDlg').close();
   if(await confirmBox('Anular venta', `“${it.artist} – ${it.album}” regresa al stock.`)){
-    it.sale = null; it.status = 'stock'; save(); renderAll(); toast('Venta anulada, regresa a stock');
+    it.sale = null; it.status = 'stock'; touch(it); save(); renderAll(); toast('Venta anulada, regresa a stock');
     if(syncOn() && it.releaseId) setTimeout(()=>syncItems([it]), 1200);
   }
 });
@@ -1241,7 +1390,7 @@ function renderSettings(){
   $('#setDefPrice').value = state.settings.defPrice ?? '';
   $('#lastBackup').textContent = state.lastBackup ? `Último respaldo: ${new Date(state.lastBackup).toLocaleString('es-MX')}` : 'Aún no descargas ningún respaldo.';
   $('#appVersion').textContent = APP_VERSION;
-  renderSync();
+  renderSync(); renderCloud();
 }
 function renderSync(){
   const S = state.settings;
@@ -1310,7 +1459,7 @@ $('#testToken').onclick = async ()=>{
 };
 $('#expJson').onclick = ()=>{
   state.lastBackup = new Date().toISOString(); save();
-  const data = {...state, settings:{...state.settings, token:''}};
+  const data = {...state, settings:{...state.settings, token:''}, cloud:{...state.cloud, key:''}};
   download(`noriko-respaldo-${today()}.json`, JSON.stringify(data,null,1), 'application/json');
   renderSettings();
 };
@@ -1321,7 +1470,9 @@ $('#impJson').addEventListener('change', async e=>{
     if(!Array.isArray(d.items)) throw 0;
     if(!(await confirmBox('Restaurar respaldo', `Se reemplaza el inventario actual (${state.items.length} discos) por el del archivo (${d.items.length} discos).`))) return;
     const tok = state.settings.token;
-    state = {...blank(), ...d, settings:{...blank().settings, ...(d.settings||{}), token: tok || (d.settings&&d.settings.token) || ''}};
+    const cloud = state.cloud;
+    state = {...blank(), ...d, settings:{...blank().settings, ...(d.settings||{}), token: tok || (d.settings&&d.settings.token) || ''}, cloud:{...cloud, deleted:[]}};
+    state.items.forEach(touch); state.events.forEach(touch);
     save(); renderAll(); renderSettings(); toast('Respaldo restaurado');
   }catch(err){ toast('Ese archivo no es un respaldo válido', true); }
 });
@@ -1337,8 +1488,9 @@ $('#expSalesCsv').onclick = ()=>{
   download(`noriko-ventas-${today()}.csv`, csv(rows), 'text/csv;charset=utf-8');
 };
 $('#wipeBtn').onclick = async ()=>{
-  if(await confirmBox('Borrar todo', 'Se eliminan todos los discos y ventas de este navegador. Descarga un respaldo antes.', 'BORRAR')){
-    const tok = state.settings.token; state = blank(); state.settings.token = tok; save(); renderAll(); toast('Datos borrados');
+  if(await confirmBox('Borrar todo', 'Se eliminan todos los discos y ventas de este navegador. Lo que esté en Google Sheets no se borra y vuelve a bajar al sincronizar.', 'BORRAR')){
+    const tok = state.settings.token, cloud = state.cloud; state = blank(); state.settings.token = tok;
+    state.cloud = {...cloud, lastSync:null, deleted:[]}; save(); renderAll(); toast('Datos borrados de este navegador');
   }
 };
 
@@ -1367,7 +1519,7 @@ function renderPop(){
         <button class="btn sm" data-sum="${e.id}">Resumen</button><button class="btn sm ghost" data-reopen="${e.id}">Reabrir</button></div>`;
     }).join('') : `<div class="empty small">Aquí aparecerán tus pop-ups cerrados con su resumen.</div>`;
     $$('#popPast [data-sum]').forEach(b=>b.onclick=()=>openSummary(b.dataset.sum));
-    $$('#popPast [data-reopen]').forEach(b=>b.onclick=()=>{ state.activeEventId = b.dataset.reopen; const e=activeEvent(); e.closedAt=null; save(); renderPop(); toast(`“${e.name}” abierto de nuevo`); });
+    $$('#popPast [data-reopen]').forEach(b=>b.onclick=()=>{ state.activeEventId = b.dataset.reopen; const e=activeEvent(); e.closedAt=null; touch(e); save(); renderPop(); toast(`“${e.name}” abierto de nuevo`); });
     return;
   }
   $('#popLiveName').textContent = `${ev.name} · ${fmtDate(ev.date)}`;
@@ -1392,14 +1544,14 @@ function renderPop(){
 async function undoSale(id){
   const it = state.items.find(i=>i.id===id); if(!it || !it.sale) return;
   if(!(await confirmBox('Anular venta', `“${it.artist} – ${it.album}” regresa al stock.`))) return;
-  it.sale = null; it.status = 'stock'; save(); renderAll(); renderPop(); toast('Venta anulada, regresa a stock');
+  it.sale = null; it.status = 'stock'; touch(it); save(); renderAll(); renderPop(); toast('Venta anulada, regresa a stock');
   if(syncOn() && it.releaseId) setTimeout(()=>syncItems([it]), 1200);
 }
 $('#popOpenForm').addEventListener('submit', e=>{
   e.preventDefault();
   const name = $('#popName').value.trim() || defaultEventName();
   const ev = {id:uid(), name, date:$('#popDate').value || today(), openedAt:new Date().toISOString(), closedAt:null};
-  state.events.push(ev); state.activeEventId = ev.id; save();
+  touch(ev); state.events.push(ev); state.activeEventId = ev.id; save();
   $('#popName').value = ''; $('#popDate').value = '';
   renderPop(); refreshLists(); toast(`Pop-up abierto: ${name}`);
 });
@@ -1408,7 +1560,7 @@ $('#popCloseBtn').addEventListener('click', async ()=>{
   const n = eventSales(ev).length;
   if(!(await confirmBox('Cerrar pop-up', `Se cierra “${ev.name}” con ${n} ${n===1?'venta':'ventas'}. Podrás ver el resumen y reabrirlo si te faltó algo.`))) return;
   await stopCam();
-  ev.closedAt = new Date().toISOString(); state.activeEventId = null; save();
+  ev.closedAt = new Date().toISOString(); touch(ev); state.activeEventId = null; save();
   renderPop(); openSummary(ev.id);
 });
 
@@ -1486,7 +1638,7 @@ $('#quickForm').addEventListener('submit', e=>{
   if(!it || !ev || !qkPay) return;
   it.sale = {price:num($('#qkPrice').value), date:ev.date, method:qkPay, channel:'Pop-up', event:ev.name, eventId:ev.id,
     buyer:'', notes:'', at:new Date().toISOString()};
-  it.status = 'sold'; save();
+  it.status = 'sold'; touch(it); save();
   $('#quickDlg').close(); renderAll();
   toast(`Vendido · ${money(it.sale.price)} · ${qkPay}`);
   afterQuick();
@@ -1541,16 +1693,44 @@ $('#sumCopy').addEventListener('click', async ()=>{
 registerCam('pop', {reader:$('#popReader'), btn:$('#popCamBtn'), photo:$('#popPhoto'), msg:$('#popCamMsg'), label:'Escanear venta',
   onCode:(code, source)=>popLookup(code, source==='camera'?'camera':'photo')});
 
+$('#cloudConnectBtn').addEventListener('click', async ()=>{
+  const url = $('#cloudUrl').value.trim(), key = $('#cloudKey').value.trim();
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)){ toast('Pega la URL del script de Google (empieza con https://script.google.com)', true); return; }
+  if(!key){ toast('Escribe la clave que pusiste en el script', true); return; }
+  const first = !cloudOn() || state.cloud.url !== url;
+  state.cloud.url = url; state.cloud.key = key;
+  if(first){   // primera conexión: sube todo lo que hay en este navegador
+    const now = new Date().toISOString();
+    state.items.forEach(i=>{ if(!i.updatedAt) i.updatedAt = i.createdAt || now; i._dirty = true; });
+    state.events.forEach(e=>{ if(!e.updatedAt) e.updatedAt = e.openedAt || now; e._dirty = true; });
+  }
+  saveLocal();
+  $('#cloudInfo').innerHTML = '<span class="spinner"></span> Conectando con tu hoja…';
+  const r = await cloudSync();
+  renderCloud();
+  if(r.ok) toast(`Conectado · ${r.rows} discos en la hoja`); else if(r.error!=='busy') toast(r.error, true);
+});
+$('#cloudNow').addEventListener('click', async ()=>{ $('#cloudInfo').innerHTML = '<span class="spinner"></span> Sincronizando…'; const r = await cloudSync(); renderCloud(); if(r.ok) toast('Todo al día'); });
+$('#cloudOff').addEventListener('click', async ()=>{
+  if(!(await confirmBox('Desconectar Google Sheets', 'Este navegador deja de sincronizar. Tus datos se quedan aquí y en la hoja.'))) return;
+  state.cloud = {...blank().cloud}; saveLocal(); renderCloud(); renderCloudInd();
+});
+$('#cloudInd').addEventListener('click', ()=>{ if(cloudErr) toast(cloudErr, true); cloudSync(); });
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && cloudOn()) cloudSync(); });
+window.addEventListener('online', ()=>{ if(cloudOn()) cloudSync(); });
+setInterval(()=>{ if(cloudOn() && document.visibilityState==='visible') cloudSync(); }, 120000);
+
 /* ---------- Diálogos ---------- */
 $$('dialog [data-close]').forEach(b=>b.addEventListener('click', ()=>b.closest('dialog').close()));
 $$('dialog').forEach(d=>d.addEventListener('click', e=>{ if(e.target===d) d.close(); }));
 
 function renderAll(){
-  renderHeader(); refreshLists();
+  renderHeader(); refreshLists(); renderCloudInd();
   const v = ($('.view.active')||{}).id;
   if(v==='v-pop') renderPop(); if(v==='v-inv') renderInv(); if(v==='v-sales') renderSales(); if(v==='v-stats') renderStats();
 }
 if(activeEvent()) show('v-pop'); else renderAll();
+if(cloudOn()) setTimeout(cloudSync, 300);
 })();
 </script>
 </body>
