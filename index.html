@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F4EDE1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NORiKO Inv">
+<title>NORiKO Records · Inventario</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,500;0,700;0,900;1,900&family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --blue:#0F04F2; --orange:#FE3D1E; --cream:#F4EDE1; --ink:#16130F;
+    --paper:#FBF7F0; --line:#d9cfbf; --muted:#6d655a; --ok:#1d7a3a;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0;background:var(--cream);color:var(--ink);font-family:Jost,system-ui,sans-serif;font-weight:500;-webkit-text-size-adjust:100%}
+  body{
+    min-height:100vh;
+    padding-bottom:calc(76px + env(safe-area-inset-bottom));
+    background-image:
+      linear-gradient(rgba(22,19,15,.045) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(22,19,15,.045) 1px,transparent 1px);
+    background-size:22px 22px;
+  }
+  button,input,select,textarea{font:inherit;color:inherit}
+  a{color:var(--blue)}
+
+  /* Header */
+  header{position:sticky;top:0;z-index:20;background:var(--cream);border-bottom:2px solid var(--ink);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px}
+  header .band{position:absolute;left:0;right:0;bottom:-8px;height:6px;background:var(--orange)}
+  .logo{font-weight:900;font-style:italic;color:var(--blue);font-size:28px;letter-spacing:-.5px;line-height:1}
+  .logo small{display:block;font-size:11px;letter-spacing:3px;font-style:italic;margin-top:2px}
+  .stamp{font-family:"Noto Sans JP",sans-serif;font-weight:900;font-size:13px;background:var(--blue);color:var(--cream);border-radius:50%;width:40px;height:40px;display:grid;place-items:center;letter-spacing:-1px;margin-left:auto;flex:none}
+  .hdr-meta{font-size:12px;color:var(--muted);text-align:right;line-height:1.3}
+
+  main{max-width:820px;margin:0 auto;padding:22px 14px 30px}
+  .view{display:none}
+  .view.active{display:block}
+  h2{font-weight:900;font-style:italic;font-size:26px;margin:4px 0 14px;letter-spacing:-.3px}
+  h3{font-weight:700;font-size:16px;margin:18px 0 8px}
+
+  .card{background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:3px 3px 0 var(--ink)}
+  .row{display:flex;gap:8px;align-items:center}
+  .row.wrap{flex-wrap:wrap}
+  .grow{flex:1;min-width:0}
+  label.f{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:10px 0 4px}
+  input[type=text],input[type=number],input[type=date],input[type=password],input[type=search],select,textarea{
+    width:100%;padding:11px 12px;border:1.5px solid var(--ink);border-radius:10px;background:#fff;font-size:16px;font-weight:500}
+  input:focus,select:focus,textarea:focus{outline:3px solid rgba(15,4,242,.25);border-color:var(--blue)}
+  textarea{min-height:64px;resize:vertical}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px}
+
+  .btn{appearance:none;border:1.5px solid var(--ink);background:#fff;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;font-size:15px}
+  .btn:active{transform:translate(1px,1px)}
+  .btn.primary{background:var(--blue);color:var(--cream);border-color:var(--blue)}
+  .btn.accent{background:var(--orange);color:var(--ink)}
+  .btn.ink{background:var(--ink);color:var(--cream)}
+  .btn.ghost{background:transparent;border-color:transparent;text-decoration:underline;padding:8px}
+  .btn.danger{color:#b3170a;border-color:#b3170a}
+  .btn.sm{padding:7px 10px;font-size:13px;border-radius:8px}
+  .btn.block{width:100%}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  /* Scanner */
+  #reader{width:100%;border-radius:10px;overflow:hidden;background:var(--ink);min-height:0}
+  #reader video{border-radius:10px}
+  #reader:empty{display:none}
+  .scan-hint{font-size:13px;color:var(--muted);margin-top:8px}
+  details summary{cursor:pointer;font-weight:700;padding:4px 0}
+
+  /* Results / items */
+  .list{display:flex;flex-direction:column;gap:10px}
+  .item{display:flex;gap:12px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);padding:10px;align-items:flex-start}
+  .item.sold{opacity:.7;background:#efe8dc}
+  .thumb{width:64px;height:64px;flex:none;border-radius:6px;background:#e6dccb center/cover no-repeat;border:1px solid var(--line);display:grid;place-items:center;font-size:24px;color:var(--muted)}
+  .it-title{font-weight:700;line-height:1.2}
+  .it-artist{font-weight:900;font-style:italic}
+  .it-meta{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .it-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .price{font-weight:900;font-size:17px;white-space:nowrap}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;border:1px solid var(--ink);margin-right:4px;vertical-align:middle;white-space:nowrap}
+  .cat-alt{background:var(--blue);color:var(--cream);border-color:var(--blue)}
+  .cat-jp{background:var(--orange);color:var(--ink);border-color:var(--orange)}
+  .cat-latam{background:var(--ink);color:var(--cream)}
+  .cat-rare{background:var(--cream);color:var(--blue);border-color:var(--blue)}
+  .chip.sold{background:#fff;color:var(--muted);border-color:var(--muted)}
+  .chip.stock{background:#e3f1e6;color:var(--ok);border-color:var(--ok)}
+
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .pill{border:1.5px solid var(--ink);background:#fff;border-radius:99px;padding:6px 12px;font-weight:700;font-size:13px;cursor:pointer}
+  .pill.on{background:var(--ink);color:var(--cream)}
+  .summary-line{font-size:13px;color:var(--muted);margin:6px 2px 12px}
+
+  /* KPIs */
+  .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  @media(min-width:640px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  .kpi{background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);padding:12px}
+  .kpi .k{font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--muted)}
+  .kpi .v{font-size:24px;font-weight:900;margin-top:4px;font-variant-numeric:tabular-nums}
+  .kpi .s{font-size:12px;color:var(--muted);margin-top:2px}
+  .kpi.blue{background:var(--blue);color:var(--cream);border-color:var(--blue)}
+  .kpi.blue .k,.kpi.blue .s{color:#cfd0ff}
+  table{width:100%;border-collapse:collapse;font-size:14px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);overflow:hidden}
+  th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--line)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:#efe7d9}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:0}
+  .tbl-wrap{overflow-x:auto;margin-bottom:6px}
+
+  /* Nav */
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--ink);display:flex;justify-content:space-around;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  nav button{background:none;border:0;color:#bdb4a6;font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;cursor:pointer;border-radius:10px;min-width:60px}
+  nav button svg{width:22px;height:22px}
+  nav button.on{color:var(--cream);background:rgba(244,237,225,.1)}
+  nav button.on svg{color:var(--orange)}
+
+  /* Dialog */
+  dialog{border:2px solid var(--ink);border-radius:16px;padding:0;width:min(560px,94vw);max-height:90vh;background:var(--cream);color:var(--ink);box-shadow:5px 5px 0 var(--ink)}
+  dialog::backdrop{background:rgba(22,19,15,.55)}
+  .dlg-head{background:var(--blue);color:var(--cream);padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:2}
+  .dlg-head.sell{background:var(--orange);color:var(--ink)}
+  .dlg-head h4{margin:0;font-weight:900;font-style:italic;font-size:20px;flex:1}
+  .dlg-head .x{background:none;border:0;color:inherit;font-size:26px;cursor:pointer;line-height:1}
+  .dlg-body{padding:12px 16px 16px;overflow:auto}
+  .dlg-foot{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;border-top:1.5px solid var(--ink);background:var(--paper);position:sticky;bottom:0}
+  .rel-box{display:flex;gap:12px;align-items:flex-start;margin-bottom:4px}
+  .rel-box .thumb{width:84px;height:84px}
+  .market{font-size:13px;background:#fff;border:1px dashed var(--ink);border-radius:8px;padding:8px 10px;margin-top:10px}
+  .check{display:flex;gap:8px;align-items:center;margin-top:12px;font-weight:700}
+  .check input{width:20px;height:20px}
+
+  .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--cream);padding:10px 16px;border-radius:10px;font-weight:700;opacity:0;transition:.25s;z-index:100;max-width:90vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:#b3170a}
+  .empty{text-align:center;color:var(--muted);padding:26px 10px;border:1.5px dashed var(--line);border-radius:var(--radius)}
+  .notice{background:#fff3ef;border:1.5px solid var(--orange);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+  .spinner{display:inline-block;width:16px;height:16px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  .mt0{margin-top:0}
+  .sale-group{margin-bottom:16px}
+  .sale-group h3{display:flex;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:4px}
+  .match-box{border:2px solid var(--ok);background:#eef8f0;border-radius:var(--radius);padding:10px;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">NORiKO<small>RECORDS · INVENTARIO</small></div>
+  <div class="hdr-meta grow" id="hdrMeta"></div>
+  <div class="stamp" aria-hidden="true">中古盤</div>
+  <div class="band"></div>
+</header>
+
+<main>
+  <!-- ESCANEAR -->
+  <section class="view active" id="v-scan">
+    <h2>Escanear</h2>
+    <div id="tokenNotice"></div>
+
+    <div class="card">
+      <div id="reader"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary grow" id="camBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+          <span>Escanear con cámara</span>
+        </button>
+        <label class="btn" title="Leer el código desde una foto">
+          Foto
+          <input type="file" accept="image/*" capture="environment" id="photoInput" hidden>
+        </label>
+      </div>
+      <form id="barcodeForm" class="row" style="margin-top:10px" autocomplete="off">
+        <input type="text" inputmode="numeric" id="barcodeInput" placeholder="Código de barras (o usa un lector USB)" class="grow">
+        <button class="btn ink" type="submit">Buscar</button>
+      </form>
+      <div class="scan-hint">Un lector de códigos USB o Bluetooth funciona aquí: escribe el código y da Enter solo.</div>
+    </div>
+
+    <details class="card">
+      <summary>Buscar sin código de barras</summary>
+      <form id="textForm" autocomplete="off">
+        <div class="grid2">
+          <div><label class="f">Artista</label><input type="text" id="qArtist"></div>
+          <div><label class="f">Álbum</label><input type="text" id="qTitle"></div>
+        </div>
+        <label class="f">No. de catálogo (ej. VDR-1234)</label>
+        <input type="text" id="qCatno">
+        <div class="row" style="margin-top:12px">
+          <button class="btn ink grow" type="submit">Buscar en Discogs</button>
+          <button class="btn" type="button" id="manualBtn">Agregar manual</button>
+        </div>
+      </form>
+    </details>
+
+    <div id="localMatch"></div>
+    <div id="results"></div>
+  </section>
+
+  <!-- INVENTARIO -->
+  <section class="view" id="v-inv">
+    <h2>Inventario</h2>
+    <input type="search" id="invSearch" placeholder="Buscar artista, álbum, catálogo, lote…">
+    <div class="filters" id="statusFilters">
+      <button class="pill on" data-st="stock">En stock</button>
+      <button class="pill" data-st="sold">Vendidos</button>
+      <button class="pill" data-st="all">Todos</button>
+    </div>
+    <div class="filters" id="catFilters"></div>
+    <div class="summary-line" id="invSummary"></div>
+    <div class="list" id="invList"></div>
+  </section>
+
+  <!-- VENTAS -->
+  <section class="view" id="v-sales">
+    <h2>Ventas</h2>
+    <div class="row" style="margin-bottom:10px">
+      <select id="salesEvent" class="grow"></select>
+    </div>
+    <div id="salesList"></div>
+  </section>
+
+  <!-- RESUMEN -->
+  <section class="view" id="v-stats">
+    <h2>Resumen</h2>
+    <div class="kpis" id="kpis"></div>
+    <h3>Por categoría</h3><div class="tbl-wrap" id="tblCat"></div>
+    <h3>Por lote</h3><div class="tbl-wrap" id="tblLot"></div>
+    <h3>Por evento</h3><div class="tbl-wrap" id="tblEvent"></div>
+    <h3>Por método de pago</h3><div class="tbl-wrap" id="tblPay"></div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section class="view" id="v-set">
+    <h2>Ajustes</h2>
+    <div class="card">
+      <h3 class="mt0">Discogs</h3>
+      <p class="small muted mt0">Genera un token personal en <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">discogs.com/settings/developers</a> → “Generate new token”. Se guarda solo en este navegador.</p>
+      <label class="f">Token personal</label>
+      <div class="row">
+        <input type="password" id="setToken" class="grow" autocomplete="off">
+        <button class="btn sm" type="button" id="showToken">Ver</button>
+      </div>
+      <div class="grid2">
+        <div>
+          <label class="f">Moneda de precios Discogs</label>
+          <select id="setCurrency">
+            <option>MXN</option><option>USD</option><option>JPY</option><option>EUR</option>
+          </select>
+        </div>
+        <div>
+          <label class="f">Precio de venta por defecto</label>
+          <input type="number" id="setDefPrice" min="0" step="10">
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary grow" id="saveSettings">Guardar</button>
+        <button class="btn" id="testToken">Probar conexión</button>
+      </div>
+      <div id="testResult" class="small" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="mt0">Respaldo</h3>
+      <p class="small muted mt0">Los datos viven en este navegador. Descarga un respaldo seguido, sobre todo después de cada pop-up. Con el mismo archivo puedes pasar el inventario a otro teléfono o computadora.</p>
+      <div class="row wrap">
+        <button class="btn ink" id="expJson">Descargar respaldo (.json)</button>
+        <label class="btn">Restaurar respaldo<input type="file" accept=".json,application/json" id="impJson" hidden></label>
+      </div>
+      <div class="row wrap" style="margin-top:8px">
+        <button class="btn" id="expInvCsv">Inventario (.csv)</button>
+        <button class="btn" id="expSalesCsv">Ventas (.csv)</button>
+      </div>
+      <div id="lastBackup" class="small muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="mt0">Zona de riesgo</h3>
+      <button class="btn danger" id="wipeBtn">Borrar todos los datos</button>
+    </div>
+    <p class="small muted">NORiKO Records · We dig, you find.</p>
+  </section>
+</main>
+
+<nav id="nav">
+  <button data-v="v-scan" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>Escanear</button>
+  <button data-v="v-inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>Inventario</button>
+  <button data-v="v-sales"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12V7H4v13h9"/><path d="M4 7l2-4h12l2 4M15 17h6M18 14v6"/></svg>Ventas</button>
+  <button data-v="v-stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Resumen</button>
+  <button data-v="v-set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Ajustes</button>
+</nav>
+
+<!-- Diálogo de compra / edición -->
+<dialog id="buyDlg">
+  <form id="buyForm" method="dialog" autocomplete="off">
+    <div class="dlg-head"><h4 id="buyTitle">Registrar compra</h4><button type="button" class="x" data-close>×</button></div>
+    <div class="dlg-body">
+      <div class="rel-box">
+        <div class="thumb" id="bThumb">💿</div>
+        <div class="grow">
+          <div class="small muted" id="bRelInfo"></div>
+          <div id="bMarket"></div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div><label class="f">Artista</label><input type="text" id="bArtist" required></div>
+        <div><label class="f">Álbum</label><input type="text" id="bAlbum" required></div>
+      </div>
+      <div class="grid3">
+        <div><label class="f">Año</label><input type="text" id="bYear" inputmode="numeric"></div>
+        <div><label class="f">Formato</label>
+          <select id="bFormat"><option>CD</option><option>Vinilo</option><option>Casete</option><option>CD sencillo</option><option>Otro</option></select></div>
+        <div><label class="f">País</label><input type="text" id="bCountry"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="f">Catálogo</label><input type="text" id="bCatno"></div>
+        <div><label class="f">Código de barras</label><input type="text" id="bBarcode" inputmode="numeric"></div>
+      </div>
+      <label class="f">Categoría</label>
+      <select id="bCat"></select>
+      <div class="grid2">
+        <div><label class="f">Estado disco</label><select id="bMedia" class="cond"></select></div>
+        <div><label class="f">Estado portada/estuche</label><select id="bSleeve" class="cond"></select></div>
+      </div>
+      <label class="check"><input type="checkbox" id="bObi"> Con obi</label>
+      <div class="grid3">
+        <div><label class="f">Costo c/u</label><input type="number" id="bCost" min="0" step="any" inputmode="decimal"></div>
+        <div><label class="f">Precio venta</label><input type="number" id="bPrice" min="0" step="any" inputmode="decimal"></div>
+        <div id="bQtyWrap"><label class="f">Cantidad</label><input type="number" id="bQty" min="1" step="1" value="1" inputmode="numeric"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="f">Lote</label><input type="text" id="bLot" list="lotList" placeholder="ej. Colección 72"></div>
+        <div><label class="f">Fecha de compra</label><input type="date" id="bDate"></div>
+      </div>
+      <label class="f">Proveedor / origen</label><input type="text" id="bSupplier" list="supList" placeholder="ej. ZenMarket, tianguis, particular">
+      <label class="f">Notas</label><textarea id="bNotes" placeholder="Rayones, faltantes, edición especial…"></textarea>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn danger" id="bDelete" hidden>Eliminar</button>
+      <span class="grow"></span>
+      <button type="button" class="btn" data-close>Cancelar</button>
+      <button type="submit" class="btn primary" id="bSave">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Diálogo de venta -->
+<dialog id="sellDlg">
+  <form id="sellForm" method="dialog" autocomplete="off">
+    <div class="dlg-head sell"><h4 id="sellTitle">Registrar venta</h4><button type="button" class="x" data-close>×</button></div>
+    <div class="dlg-body">
+      <div class="rel-box">
+        <div class="thumb" id="sThumb">💿</div>
+        <div class="grow"><div class="it-artist" id="sArtist"></div><div class="it-title" id="sAlbum"></div><div class="it-meta" id="sMeta"></div></div>
+      </div>
+      <div class="grid2">
+        <div><label class="f">Precio de venta</label><input type="number" id="sPrice" min="0" step="any" inputmode="decimal" required></div>
+        <div><label class="f">Fecha</label><input type="date" id="sDate" required></div>
+      </div>
+      <label class="f">Método de pago</label>
+      <div class="filters" id="sPayPills"></div>
+      <label class="f">Canal</label>
+      <div class="filters" id="sChanPills"></div>
+      <label class="f">Evento</label><input type="text" id="sEvent" list="eventList" placeholder="ej. Pop-up 18 dic">
+      <label class="f">Comprador (opcional)</label><input type="text" id="sBuyer" placeholder="@usuario o nombre">
+      <label class="f">Notas</label><textarea id="sNotes"></textarea>
+      <div id="sProfit" class="market"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn danger" id="sUndo" hidden>Anular venta</button>
+      <span class="grow"></span>
+      <button type="button" class="btn" data-close>Cancelar</button>
+      <button type="submit" class="btn accent">Guardar venta</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Diálogo de confirmación -->
+<dialog id="confirmDlg">
+  <div class="dlg-head" style="background:var(--ink)"><h4 id="cfTitle">¿Seguro?</h4></div>
+  <div class="dlg-body"><p id="cfText"></p><input type="text" id="cfInput" hidden></div>
+  <div class="dlg-foot"><span class="grow"></span><button class="btn" id="cfNo">Cancelar</button><button class="btn danger" id="cfYes">Confirmar</button></div>
+</dialog>
+
+<datalist id="lotList"></datalist>
+<datalist id="supList"></datalist>
+<datalist id="eventList"></datalist>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- Constantes ---------- */
+const STORE_KEY = 'noriko-inventario-v1';
+const CATS = [
+  {id:'alt',   name:'Alt · Occidental', cls:'cat-alt'},
+  {id:'jp',    name:'Japón · 日本',      cls:'cat-jp'},
+  {id:'latam', name:'Latam · MX',        cls:'cat-latam'},
+  {id:'rare',  name:'Rareza · レア',     cls:'cat-rare'},
+];
+const CONDS = ['M','NM','VG+','VG','G+','G','P'];
+const PAYS  = ['Efectivo','Mercado Pago','Tarjeta','Transferencia'];
+const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
+
+/* ---------- Estado ---------- */
+let state = load();
+function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180}, items:[], lastBackup:null}; }
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return blank();
+    const d = JSON.parse(raw);
+    const b = blank();
+    return {...b, ...d, settings:{...b.settings, ...(d.settings||{})}, items:Array.isArray(d.items)?d.items:[]};
+  }catch(e){ return blank(); }
+}
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  catch(e){ toast('No se pudo guardar en este navegador', true); }
+}
+if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
+
+/* ---------- Utilidades ---------- */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const today = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+const fmt = (n, cur='MXN') => new Intl.NumberFormat('es-MX',{style:'currency',currency:cur,maximumFractionDigits: cur==='JPY'?0:2, minimumFractionDigits:0}).format(n||0);
+const money = n => fmt(n,'MXN');
+const digits = s => String(s||'').replace(/\D/g,'');
+const catOf = id => CATS.find(c=>c.id===id) || CATS[0];
+const fmtDate = s => { if(!s) return ''; const [y,m,d]=s.split('-'); const M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']; return `${+d} ${M[+m-1]} ${y}`; };
+const cleanArtist = s => String(s||'').replace(/\s\(\d+\)$/,'').replace(/\*$/,'').trim();
+
+function toast(msg, err=false){
+  const t = $('#toast'); t.textContent = msg; t.classList.toggle('err', err); t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function thumbStyle(url){ return url ? `style="background-image:url('${esc(url)}')"` : ''; }
+function thumbHtml(url, cls='thumb'){ return `<div class="${cls}" ${thumbStyle(url)}>${url?'':'💿'}</div>`; }
+function confirmBox(title, text, requireWord){
+  return new Promise(res=>{
+    const d=$('#confirmDlg'); $('#cfTitle').textContent=title; $('#cfText').textContent=text;
+    const inp=$('#cfInput'); inp.hidden=!requireWord; inp.value=''; inp.placeholder=requireWord?`Escribe ${requireWord}`:'';
+    const done=v=>{ d.close(); $('#cfYes').onclick=$('#cfNo').onclick=null; res(v); };
+    $('#cfYes').onclick=()=>{ if(requireWord && inp.value.trim().toUpperCase()!==requireWord){ inp.focus(); return; } done(true); };
+    $('#cfNo').onclick=()=>done(false);
+    d.showModal();
+  });
+}
+function download(name, text, type){
+  const blob = new Blob([text], {type});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ---------- Discogs ---------- */
+const API = 'https://api.discogs.com';
+async function dg(path, params={}){
+  const tok = state.settings.token;
+  if(!tok) throw new Error('Falta el token de Discogs (Ajustes).');
+  const url = new URL(API + path);
+  Object.entries({...params, token:tok}).forEach(([k,v])=>{ if(v!==undefined && v!=='') url.searchParams.set(k,v); });
+  let r;
+  try{ r = await fetch(url.toString()); }
+  catch(e){ throw new Error('Sin conexión con Discogs. Revisa tu internet.'); }
+  if(r.status===401) throw new Error('Token de Discogs inválido. Revísalo en Ajustes.');
+  if(r.status===429) throw new Error('Discogs pide esperar un minuto (límite de consultas).');
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error('Discogs respondió con error ' + r.status);
+  return r.json();
+}
+function parseResult(x){
+  const [artistRaw, ...rest] = String(x.title||'').split(' - ');
+  const fmts = (x.format||[]);
+  return {
+    releaseId: x.id,
+    artist: cleanArtist(artistRaw),
+    album: rest.join(' - ') || x.title,
+    year: x.year || '',
+    country: x.country || '',
+    formatRaw: fmts.join(', '),
+    format: guessFormat(fmts.join(' ')),
+    label: (x.label||[])[0] || '',
+    catno: x.catno && x.catno!=='none' ? x.catno : '',
+    barcode: (x.barcode||[]).map(digits).find(b=>b.length>=8) || '',
+    thumb: x.thumb || x.cover_image || '',
+    country_jp: x.country==='Japan',
+  };
+}
+function guessFormat(s){
+  s = s.toLowerCase();
+  if(s.includes('vinyl')) return 'Vinilo';
+  if(s.includes('cassette')) return 'Casete';
+  if(s.includes('cd') && (s.includes('single')||s.includes('maxi'))) return 'CD sencillo';
+  if(s.includes('cd')) return 'CD';
+  return 'Otro';
+}
+function barcodeVariants(code){
+  const c = digits(code); const v = [c];
+  if(c.length===13 && c.startsWith('0')) v.push(c.slice(1));
+  if(c.length===12) v.push('0'+c);
+  return [...new Set(v)];
+}
+async function searchBarcode(code){
+  for(const v of barcodeVariants(code)){
+    const d = await dg('/database/search', {barcode:v, type:'release', per_page:25});
+    if(d && d.results && d.results.length) return d.results.map(parseResult);
+  }
+  // Discogs a veces guarda el código con espacios: prueba búsqueda libre
+  const d = await dg('/database/search', {q:digits(code), type:'release', per_page:25});
+  return d && d.results ? d.results.map(parseResult) : [];
+}
+async function searchText(artist, title, catno){
+  const d = await dg('/database/search', {artist, release_title:title, catno, type:'release', per_page:30});
+  return d && d.results ? d.results.map(parseResult) : [];
+}
+async function marketStats(id){
+  try{ return await dg('/marketplace/stats/'+id, {curr_abbr: state.settings.currency}); }
+  catch(e){ return null; }
+}
+
+/* ---------- Navegación ---------- */
+function show(v){
+  $$('.view').forEach(s=>s.classList.toggle('active', s.id===v));
+  $$('#nav button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+  if(v!=='v-scan') stopCam();
+  if(v==='v-inv') renderInv();
+  if(v==='v-sales') renderSales();
+  if(v==='v-stats') renderStats();
+  if(v==='v-set') renderSettings();
+  window.scrollTo(0,0);
+}
+$$('#nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.v)));
+
+function renderHeader(){
+  const st = state.items.filter(i=>i.status==='stock').length;
+  const sold = state.items.filter(i=>i.status==='sold').length;
+  $('#hdrMeta').innerHTML = `${st} en stock<br>${sold} ${sold===1?'vendido':'vendidos'}`;
+  $('#tokenNotice').innerHTML = state.settings.token ? '' :
+    `<div class="notice">Para identificar discos necesitas tu token de Discogs. <a href="#" id="goSet">Agrégalo en Ajustes</a>.</div>`;
+  const g = $('#goSet'); if(g) g.onclick = e=>{e.preventDefault(); show('v-set');};
+}
+function refreshLists(){
+  const uniq = k => [...new Set(state.items.map(i=>k(i)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  $('#lotList').innerHTML = uniq(i=>i.lot).map(x=>`<option value="${esc(x)}">`).join('');
+  $('#supList').innerHTML = uniq(i=>i.supplier).map(x=>`<option value="${esc(x)}">`).join('');
+  $('#eventList').innerHTML = uniq(i=>i.sale&&i.sale.event).map(x=>`<option value="${esc(x)}">`).join('');
+}
+
+/* ---------- Escáner ---------- */
+let scanner = null, scanning = false;
+function scannerFormats(){
+  const F = window.Html5QrcodeSupportedFormats;
+  return F ? [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39] : undefined;
+}
+async function startCam(){
+  if(!window.Html5Qrcode){ toast('No cargó el lector de códigos. Revisa tu conexión.', true); return; }
+  try{
+    scanner = scanner || new Html5Qrcode('reader', {formatsToSupport: scannerFormats(), verbose:false,
+      experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
+    await scanner.start({facingMode:'environment'},
+      {fps:12, qrbox:(w,h)=>({width:Math.min(w*0.85,320), height:Math.min(h*0.45,150)}), aspectRatio:1.6},
+      onScan, ()=>{});
+    scanning = true; $('#camBtn span').textContent = 'Detener cámara';
+  }catch(e){
+    scanning = false;
+    toast('No se pudo abrir la cámara. Revisa permisos (la app debe abrirse con https).', true);
+  }
+}
+async function stopCam(){
+  if(scanner && scanning){ try{ await scanner.stop(); scanner.clear(); }catch(e){} }
+  scanning = false; $('#camBtn span').textContent = 'Escanear con cámara';
+}
+async function onScan(text){
+  if(navigator.vibrate) navigator.vibrate(80);
+  await stopCam();
+  $('#barcodeInput').value = text;
+  lookup(text);
+}
+$('#camBtn').addEventListener('click', ()=> scanning ? stopCam() : startCam());
+$('#photoInput').addEventListener('change', async e=>{
+  const f = e.target.files[0]; e.target.value=''; if(!f) return;
+  if(!window.Html5Qrcode){ toast('No cargó el lector de códigos.', true); return; }
+  await stopCam();
+  try{
+    const h = new Html5Qrcode('reader', {formatsToSupport: scannerFormats(), verbose:false});
+    const code = await h.scanFile(f, false); h.clear();
+    $('#barcodeInput').value = code; lookup(code);
+  }catch(err){ toast('No encontré un código en la foto. Intenta más cerca y con buena luz.', true); }
+});
+$('#barcodeForm').addEventListener('submit', e=>{ e.preventDefault(); const c=$('#barcodeInput').value.trim(); if(c) lookup(c); });
+$('#textForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const a=$('#qArtist').value.trim(), t=$('#qTitle').value.trim(), c=$('#qCatno').value.trim();
+  if(!a && !t && !c){ toast('Escribe artista, álbum o catálogo'); return; }
+  $('#localMatch').innerHTML='';
+  $('#results').innerHTML = `<p class="muted"><span class="spinner"></span> Buscando en Discogs…</p>`;
+  try{ renderResults(await searchText(a,t,c), null); }
+  catch(err){ $('#results').innerHTML = `<div class="notice">${esc(err.message)}</div>`; }
+});
+$('#manualBtn').addEventListener('click', ()=> openBuy({artist:$('#qArtist').value.trim(), album:$('#qTitle').value.trim(), catno:$('#qCatno').value.trim(), barcode:digits($('#barcodeInput').value)}));
+
+let lastResults = [];
+async function lookup(code){
+  const c = digits(code);
+  if(c.length < 6){ toast('Ese código no parece válido'); return; }
+  // 1) ¿Ya está en tu inventario?
+  const vars = barcodeVariants(c);
+  const mine = state.items.filter(i=>i.status==='stock' && vars.includes(digits(i.barcode)));
+  $('#localMatch').innerHTML = mine.length ? `
+    <div class="match-box">
+      <strong>Ya tienes ${mine.length} en stock</strong>
+      <div class="list" style="margin-top:8px">${mine.map(i=>itemCard(i,true)).join('')}</div>
+    </div>` : '';
+  bindItemButtons($('#localMatch'));
+  // 2) Discogs
+  if(!state.settings.token){ $('#results').innerHTML = mine.length?'':`<div class="notice">Agrega tu token de Discogs en Ajustes para identificar el disco, o usa “Agregar manual”.</div>`; return; }
+  $('#results').innerHTML = `<p class="muted"><span class="spinner"></span> Buscando ${esc(c)} en Discogs…</p>`;
+  try{ renderResults(await searchBarcode(c), c); }
+  catch(err){ $('#results').innerHTML = `<div class="notice">${esc(err.message)}</div>`; }
+}
+function renderResults(list, code){
+  lastResults = list;
+  if(!list.length){
+    $('#results').innerHTML = `<div class="empty">No encontré ese disco en Discogs.<br><br>
+      <button class="btn" id="noResManual">Agregar manual${code?' con este código':''}</button></div>`;
+    $('#noResManual').onclick = ()=>openBuy({barcode:code||''});
+    return;
+  }
+  $('#results').innerHTML = `<h3>${list.length} ${list.length===1?'edición':'ediciones'} en Discogs${list.length>1?' · elige la tuya':''}</h3>
+    <div class="list">${list.map((r,ix)=>`
+      <div class="item">
+        ${thumbHtml(r.thumb)}
+        <div class="grow">
+          <div class="it-artist">${esc(r.artist)}</div>
+          <div class="it-title">${esc(r.album)}</div>
+          <div class="it-meta">${[r.year,r.country,r.formatRaw].filter(Boolean).map(esc).join(' · ')}<br>${[r.label,r.catno].filter(Boolean).map(esc).join(' · ')}</div>
+          <div class="it-actions">
+            <button class="btn primary sm" data-buy="${ix}">+ Registrar compra</button>
+            <a class="btn sm" href="https://www.discogs.com/release/${r.releaseId}" target="_blank" rel="noopener">Ver en Discogs</a>
+          </div>
+        </div>
+      </div>`).join('')}</div>`;
+  $$('#results [data-buy]').forEach(b=>b.onclick=()=>{
+    const r = {...lastResults[+b.dataset.buy]};
+    if(code) r.barcode = code;
+    openBuy(r);
+  });
+}
+
+/* ---------- Compra / edición ---------- */
+let editingId = null, buyDraft = null;
+function fillSelect(sel, opts, val){ sel.innerHTML = opts.map(o=>`<option value="${esc(o.v)}">${esc(o.t)}</option>`).join(''); if(val!==undefined) sel.value = val; }
+function openBuy(rel, item){
+  editingId = item ? item.id : null;
+  buyDraft = rel || {};
+  const src = item || rel || {};
+  $('#buyTitle').textContent = item ? 'Editar disco' : 'Registrar compra';
+  $('#bDelete').hidden = !item;
+  $('#bQtyWrap').style.visibility = item ? 'hidden' : 'visible';
+  $('#bThumb').outerHTML = thumbHtml(src.thumb).replace('class="thumb"','class="thumb" id="bThumb"');
+  $('#bRelInfo').innerHTML = src.releaseId ? `Discogs #${src.releaseId}${src.label?' · '+esc(src.label):''}` : 'Sin ficha de Discogs';
+  $('#bMarket').innerHTML = '';
+  $('#bArtist').value = src.artist||'';
+  $('#bAlbum').value = src.album||'';
+  $('#bYear').value = src.year||'';
+  $('#bFormat').value = src.format||'CD';
+  $('#bCountry').value = src.country||'';
+  $('#bCatno').value = src.catno||'';
+  $('#bBarcode').value = src.barcode||'';
+  fillSelect($('#bCat'), CATS.map(c=>({v:c.id,t:c.name})), src.category || (src.country==='Japan'?'jp':(['Mexico','Argentina','Chile','Colombia','Spain'].includes(src.country)?'latam':'alt')));
+  fillSelect($('#bMedia'), CONDS.map(c=>({v:c,t:c})), src.media||'VG+');
+  fillSelect($('#bSleeve'), CONDS.map(c=>({v:c,t:c})), src.sleeve||'VG+');
+  $('#bObi').checked = !!src.obi;
+  $('#bCost').value = item ? (item.cost ?? '') : '';
+  $('#bPrice').value = item ? (item.price ?? '') : (state.settings.defPrice || '');
+  $('#bQty').value = 1;
+  const lastLot = !item && state.items.length ? state.items[state.items.length-1] : null;
+  $('#bLot').value = item ? (item.lot||'') : (lastLot ? lastLot.lot||'' : '');
+  $('#bSupplier').value = item ? (item.supplier||'') : (lastLot ? lastLot.supplier||'' : '');
+  $('#bDate').value = item ? (item.purchasedAt||today()) : today();
+  $('#bNotes').value = item ? (item.notes||'') : '';
+  refreshLists();
+  $('#buyDlg').showModal();
+  if(src.releaseId && state.settings.token){
+    $('#bMarket').innerHTML = `<div class="market"><span class="spinner"></span> Consultando mercado Discogs…</div>`;
+    marketStats(src.releaseId).then(m=>{
+      if(!m){ $('#bMarket').innerHTML=''; return; }
+      const lp = m.lowest_price;
+      $('#bMarket').innerHTML = `<div class="market">Discogs: ${m.num_for_sale||0} a la venta${lp&&lp.value!=null?` · desde <strong>${fmt(lp.value, lp.currency||state.settings.currency)}</strong>`:''}${m.blocked_from_sale?' · <strong>bloqueado para venta</strong>':''}</div>`;
+    });
+  }
+}
+$('#buyForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const base = {
+    artist: $('#bArtist').value.trim(), album: $('#bAlbum').value.trim(),
+    year: $('#bYear').value.trim(), format: $('#bFormat').value, country: $('#bCountry').value.trim(),
+    catno: $('#bCatno').value.trim(), barcode: digits($('#bBarcode').value),
+    category: $('#bCat').value, media: $('#bMedia').value, sleeve: $('#bSleeve').value, obi: $('#bObi').checked,
+    cost: num($('#bCost').value), price: num($('#bPrice').value),
+    lot: $('#bLot').value.trim(), supplier: $('#bSupplier').value.trim(),
+    purchasedAt: $('#bDate').value || today(), notes: $('#bNotes').value.trim(),
+  };
+  if(!base.artist || !base.album){ toast('Falta artista o álbum', true); return; }
+  if(editingId){
+    const it = state.items.find(i=>i.id===editingId);
+    Object.assign(it, base, {updatedAt: new Date().toISOString()});
+    toast('Disco actualizado');
+  }else{
+    const qty = Math.max(1, Math.min(200, parseInt($('#bQty').value)||1));
+    for(let k=0;k<qty;k++){
+      state.items.push({id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'',
+        ...base, status:'stock', sale:null, createdAt:new Date().toISOString()});
+    }
+    toast(qty>1 ? `${qty} copias agregadas al inventario` : 'Agregado al inventario');
+    $('#results').innerHTML=''; $('#localMatch').innerHTML=''; $('#barcodeInput').value='';
+  }
+  save(); $('#buyDlg').close(); renderAll();
+});
+$('#bDelete').addEventListener('click', async ()=>{
+  const it = state.items.find(i=>i.id===editingId); if(!it) return;
+  $('#buyDlg').close();
+  if(await confirmBox('Eliminar disco', `Se borra “${it.artist} – ${it.album}” del inventario${it.sale?' junto con su venta':''}. No se puede deshacer.`)){
+    state.items = state.items.filter(i=>i.id!==it.id); save(); renderAll(); toast('Eliminado');
+  }
+});
+
+/* ---------- Venta ---------- */
+let sellingId = null, sPay = PAYS[0], sChan = CHANS[0];
+function pills(el, opts, cur, onPick){
+  el.innerHTML = opts.map(o=>`<button type="button" class="pill ${o===cur?'on':''}" data-o="${esc(o)}">${esc(o)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ onPick(b.dataset.o); pills(el, opts, b.dataset.o, onPick); });
+}
+function lastSale(){ return state.items.filter(i=>i.sale).sort((a,b)=>(b.sale.at||'').localeCompare(a.sale.at||''))[0]; }
+function openSell(id){
+  const it = state.items.find(i=>i.id===id); if(!it) return;
+  sellingId = id;
+  const prev = lastSale();
+  const s = it.sale || {};
+  $('#sellTitle').textContent = it.sale ? 'Editar venta' : 'Registrar venta';
+  $('#sUndo').hidden = !it.sale;
+  $('#sThumb').outerHTML = thumbHtml(it.thumb).replace('class="thumb"','class="thumb" id="sThumb"');
+  $('#sArtist').textContent = it.artist; $('#sAlbum').textContent = it.album;
+  $('#sMeta').textContent = [it.format, it.year, `${it.media}/${it.sleeve}`, it.obi?'con obi':''].filter(Boolean).join(' · ');
+  $('#sPrice').value = s.price ?? (it.price || '');
+  $('#sDate').value = s.date || today();
+  sPay = s.method || (prev && prev.sale.method) || PAYS[0];
+  sChan = s.channel || (prev && prev.sale.channel) || CHANS[0];
+  pills($('#sPayPills'), PAYS, sPay, v=>sPay=v);
+  pills($('#sChanPills'), CHANS, sChan, v=>sChan=v);
+  $('#sEvent').value = s.event ?? (prev && prev.sale.date===today() ? prev.sale.event||'' : '');
+  $('#sBuyer').value = s.buyer||''; $('#sNotes').value = s.notes||'';
+  updProfit();
+  refreshLists();
+  $('#sellDlg').showModal();
+}
+function updProfit(){
+  const it = state.items.find(i=>i.id===sellingId); if(!it) return;
+  const p = num($('#sPrice').value), g = p - num(it.cost);
+  $('#sProfit').innerHTML = `Costo ${money(it.cost)} · Utilidad <strong style="color:${g<0?'#b3170a':'var(--ok)'}">${money(g)}</strong>${it.cost>0?` (${Math.round(g/it.cost*100)}% sobre costo)`:''}`;
+}
+$('#sPrice').addEventListener('input', updProfit);
+$('#sellForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const it = state.items.find(i=>i.id===sellingId); if(!it) return;
+  it.sale = {price:num($('#sPrice').value), date:$('#sDate').value||today(), method:sPay, channel:sChan,
+    event:$('#sEvent').value.trim(), buyer:$('#sBuyer').value.trim(), notes:$('#sNotes').value.trim(),
+    at: (it.sale && it.sale.at) || new Date().toISOString()};
+  it.status = 'sold';
+  save(); $('#sellDlg').close(); renderAll();
+  $('#localMatch').innerHTML=''; $('#results').innerHTML=''; $('#barcodeInput').value='';
+  toast(`Vendido: ${money(it.sale.price)}`);
+});
+$('#sUndo').addEventListener('click', async ()=>{
+  const it = state.items.find(i=>i.id===sellingId); if(!it) return;
+  $('#sellDlg').close();
+  if(await confirmBox('Anular venta', `“${it.artist} – ${it.album}” regresa al stock.`)){
+    it.sale = null; it.status = 'stock'; save(); renderAll(); toast('Venta anulada, regresa a stock');
+  }
+});
+
+/* ---------- Tarjetas de disco ---------- */
+function itemCard(i, compact){
+  const c = catOf(i.category);
+  return `<div class="item ${i.status==='sold'?'sold':''}">
+    ${thumbHtml(i.thumb)}
+    <div class="grow">
+      <div class="row" style="align-items:flex-start">
+        <div class="grow"><div class="it-artist">${esc(i.artist)}</div><div class="it-title">${esc(i.album)}</div></div>
+        <div class="price">${i.status==='sold'? money(i.sale.price) : (i.price?money(i.price):'—')}</div>
+      </div>
+      <div class="it-meta">
+        <span class="chip ${c.cls}">${esc(c.name)}</span>${i.status==='sold'?`<span class="chip sold">Vendido ${esc(fmtDate(i.sale.date))}</span>`:''}${i.obi?'<span class="chip">obi</span>':''}<br>
+        ${[i.format, i.year, i.country, `${i.media}/${i.sleeve}`].filter(Boolean).map(esc).join(' · ')}<br>
+        ${[i.catno, i.lot?('Lote: '+i.lot):'', 'Costo '+money(i.cost)].filter(Boolean).map(esc).join(' · ')}
+      </div>
+      <div class="it-actions">
+        ${i.status==='stock' ? `<button class="btn accent sm" data-sell="${i.id}">Vender</button>` : `<button class="btn sm" data-sell="${i.id}">Ver venta</button>`}
+        ${compact?'':`<button class="btn sm" data-edit="${i.id}">Editar</button>`}
+      </div>
+    </div>
+  </div>`;
+}
+function bindItemButtons(root){
+  root.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>openSell(b.dataset.sell));
+  root.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ const it=state.items.find(i=>i.id===b.dataset.edit); openBuy(null,it); });
+}
+
+/* ---------- Inventario ---------- */
+let invStatus = 'stock', invCat = 'all';
+function renderInv(){
+  $('#catFilters').innerHTML = [{id:'all',name:'Todas'}, ...CATS].map(c=>`<button class="pill ${invCat===c.id?'on':''}" data-c="${c.id}">${esc(c.name)}</button>`).join('');
+  $$('#catFilters .pill').forEach(b=>b.onclick=()=>{ invCat=b.dataset.c; renderInv(); });
+  $$('#statusFilters .pill').forEach(b=>b.classList.toggle('on', b.dataset.st===invStatus));
+  const q = $('#invSearch').value.trim().toLowerCase();
+  let list = state.items.filter(i=>(invStatus==='all'||i.status===invStatus) && (invCat==='all'||i.category===invCat));
+  if(q) list = list.filter(i=>[i.artist,i.album,i.catno,i.lot,i.barcode,i.supplier,i.year,i.notes].join(' ').toLowerCase().includes(q));
+  list.sort((a,b)=> invStatus==='sold' ? (b.sale.date||'').localeCompare(a.sale.date||'') : a.artist.localeCompare(b.artist,'es') || a.album.localeCompare(b.album,'es'));
+  const cost = list.reduce((s,i)=>s+num(i.cost),0), val = list.reduce((s,i)=>s+(i.status==='sold'?num(i.sale.price):num(i.price)),0);
+  $('#invSummary').textContent = list.length ? `${list.length} discos · costo ${money(cost)} · ${invStatus==='sold'?'vendidos en':'precio de lista'} ${money(val)}` : '';
+  $('#invList').innerHTML = list.length ? list.map(i=>itemCard(i)).join('') :
+    `<div class="empty">${state.items.length ? 'Nada coincide con el filtro.' : 'Aún no hay discos. Escanea el primero en “Escanear”.'}</div>`;
+  bindItemButtons($('#invList'));
+}
+$('#invSearch').addEventListener('input', renderInv);
+$$('#statusFilters .pill').forEach(b=>b.onclick=()=>{ invStatus=b.dataset.st; renderInv(); });
+
+/* ---------- Ventas ---------- */
+function renderSales(){
+  const sold = state.items.filter(i=>i.sale);
+  const events = [...new Set(sold.map(i=>i.sale.event||''))];
+  const sel = $('#salesEvent'), cur = sel.value;
+  sel.innerHTML = `<option value="__all">Todas las ventas</option>` + events.map(e=>`<option value="${esc(e)}">${esc(e||'Sin evento')}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
+  const f = sel.value;
+  const list = sold.filter(i=>f==='__all' || (i.sale.event||'')===f).sort((a,b)=>(b.sale.date+b.sale.at).localeCompare(a.sale.date+a.sale.at));
+  if(!list.length){ $('#salesList').innerHTML = `<div class="empty">Todavía no registras ventas.</div>`; return; }
+  const groups = {};
+  list.forEach(i=>{ (groups[i.sale.date] = groups[i.sale.date] || []).push(i); });
+  const tot = list.reduce((s,i)=>s+num(i.sale.price),0), prof = list.reduce((s,i)=>s+num(i.sale.price)-num(i.cost),0);
+  $('#salesList').innerHTML = `<div class="summary-line">${list.length} ${list.length===1?'venta':'ventas'} · ingreso ${money(tot)} · utilidad ${money(prof)}</div>` +
+    Object.keys(groups).sort().reverse().map(d=>{
+      const g = groups[d], t = g.reduce((s,i)=>s+num(i.sale.price),0);
+      return `<div class="sale-group"><h3><span>${esc(fmtDate(d))}</span><span>${g.length} · ${money(t)}</span></h3>
+        <div class="list">${g.map(i=>`
+          <div class="item">${thumbHtml(i.thumb)}
+            <div class="grow">
+              <div class="row" style="align-items:flex-start"><div class="grow"><div class="it-artist">${esc(i.artist)}</div><div class="it-title">${esc(i.album)}</div></div><div class="price">${money(i.sale.price)}</div></div>
+              <div class="it-meta">${[i.sale.method, i.sale.channel, i.sale.event, i.sale.buyer].filter(Boolean).map(esc).join(' · ')}<br>Utilidad ${money(num(i.sale.price)-num(i.cost))}</div>
+              <div class="it-actions"><button class="btn sm" data-sell="${i.id}">Editar venta</button></div>
+            </div></div>`).join('')}</div></div>`;
+    }).join('');
+  bindItemButtons($('#salesList'));
+}
+$('#salesEvent').addEventListener('change', renderSales);
+
+/* ---------- Resumen ---------- */
+function table(head, rows, numCols){
+  if(!rows.length) return `<div class="empty small">Sin datos todavía.</div>`;
+  return `<table><thead><tr>${head.map((h,i)=>`<th class="${numCols.includes(i)?'n':''}">${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${numCols.includes(i)?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function renderStats(){
+  const I = state.items, stock = I.filter(i=>i.status==='stock'), sold = I.filter(i=>i.status==='sold');
+  const sum = (a,f)=>a.reduce((s,i)=>s+num(f(i)),0);
+  const invested = sum(I,i=>i.cost), stockCost = sum(stock,i=>i.cost), stockList = sum(stock,i=>i.price);
+  const revenue = sum(sold,i=>i.sale.price), soldCost = sum(sold,i=>i.cost), profit = revenue - soldCost;
+  const recovered = invested ? Math.round(revenue/invested*100) : 0;
+  $('#kpis').innerHTML = [
+    ['Discos en stock', stock.length, `costo ${money(stockCost)}`, ''],
+    ['Valor de lista en stock', money(stockList), 'si se vende todo a precio de lista', ''],
+    ['Vendidos', sold.length, `ticket prom. ${money(sold.length?revenue/sold.length:0)}`, ''],
+    ['Ingreso por ventas', money(revenue), `costo de lo vendido ${money(soldCost)}`, 'blue'],
+    ['Utilidad bruta', money(profit), soldCost?`${Math.round(profit/soldCost*100)}% sobre costo`:'—', ''],
+    ['Inversión recuperada', recovered+'%', `${money(revenue)} de ${money(invested)} invertidos`, ''],
+  ].map(([k,v,s,c])=>`<div class="kpi ${c}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s)}</div></div>`).join('');
+
+  const group = (arr, keyFn) => { const m = new Map(); arr.forEach(i=>{ const k=keyFn(i); if(!m.has(k)) m.set(k,[]); m.get(k).push(i); }); return m; };
+
+  $('#tblCat').innerHTML = table(['Categoría','Stock','Vendidos','Ingreso','Utilidad'],
+    CATS.map(c=>{ const a=I.filter(i=>i.category===c.id); if(!a.length) return null;
+      const s=a.filter(i=>i.status==='sold'); return [`<span class="chip ${c.cls}">${esc(c.name)}</span>`, a.length-s.length, s.length, money(sum(s,i=>i.sale.price)), money(sum(s,i=>i.sale.price)-sum(s,i=>i.cost))]; }).filter(Boolean), [1,2,3,4]);
+
+  $('#tblLot').innerHTML = table(['Lote','Discos','Costo','Vendidos','Ingreso','Recuperado'],
+    [...group(I,i=>i.lot||'Sin lote')].map(([k,a])=>{ const s=a.filter(i=>i.status==='sold'), c=sum(a,i=>i.cost), r=sum(s,i=>i.sale.price);
+      return [esc(k), a.length, money(c), s.length, money(r), c?Math.round(r/c*100)+'%':'—']; }).sort((x,y)=>y[1]-x[1]), [1,2,3,4,5]);
+
+  $('#tblEvent').innerHTML = table(['Evento','Ventas','Ingreso','Utilidad'],
+    [...group(sold,i=>i.sale.event||'Sin evento')].map(([k,a])=>[esc(k), a.length, money(sum(a,i=>i.sale.price)), money(sum(a,i=>i.sale.price)-sum(a,i=>i.cost))]), [1,2,3]);
+
+  $('#tblPay').innerHTML = table(['Método','Ventas','Ingreso'],
+    [...group(sold,i=>i.sale.method||'—')].map(([k,a])=>[esc(k), a.length, money(sum(a,i=>i.sale.price))]), [1,2]);
+}
+
+/* ---------- Ajustes y respaldo ---------- */
+function renderSettings(){
+  $('#setToken').value = state.settings.token||'';
+  $('#setCurrency').value = state.settings.currency||'MXN';
+  $('#setDefPrice').value = state.settings.defPrice ?? '';
+  $('#lastBackup').textContent = state.lastBackup ? `Último respaldo: ${new Date(state.lastBackup).toLocaleString('es-MX')}` : 'Aún no descargas ningún respaldo.';
+}
+$('#showToken').onclick = ()=>{ const t=$('#setToken'); t.type = t.type==='password'?'text':'password'; };
+$('#saveSettings').onclick = ()=>{
+  state.settings.token = $('#setToken').value.trim();
+  state.settings.currency = $('#setCurrency').value;
+  state.settings.defPrice = num($('#setDefPrice').value);
+  save(); renderHeader(); toast('Ajustes guardados');
+};
+$('#testToken').onclick = async ()=>{
+  state.settings.token = $('#setToken').value.trim(); save(); renderHeader();
+  $('#testResult').innerHTML = '<span class="spinner"></span> Probando…';
+  try{ const d = await dg('/database/search', {q:'Mariya Takeuchi', type:'release', per_page:1});
+    $('#testResult').innerHTML = d ? '<span style="color:var(--ok)">✓ Conectado con Discogs.</span>' : 'Sin respuesta.'; }
+  catch(e){ $('#testResult').innerHTML = `<span style="color:#b3170a">${esc(e.message)}</span>`; }
+};
+$('#expJson').onclick = ()=>{
+  state.lastBackup = new Date().toISOString(); save();
+  const data = {...state, settings:{...state.settings, token:''}};
+  download(`noriko-respaldo-${today()}.json`, JSON.stringify(data,null,1), 'application/json');
+  renderSettings();
+};
+$('#impJson').addEventListener('change', async e=>{
+  const f = e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const d = JSON.parse(await f.text());
+    if(!Array.isArray(d.items)) throw 0;
+    if(!(await confirmBox('Restaurar respaldo', `Se reemplaza el inventario actual (${state.items.length} discos) por el del archivo (${d.items.length} discos).`))) return;
+    const tok = state.settings.token;
+    state = {...blank(), ...d, settings:{...blank().settings, ...(d.settings||{}), token: tok || (d.settings&&d.settings.token) || ''}};
+    save(); renderAll(); renderSettings(); toast('Respaldo restaurado');
+  }catch(err){ toast('Ese archivo no es un respaldo válido', true); }
+});
+function csv(rows){ return '﻿' + rows.map(r=>r.map(v=>{ const s=String(v??''); return /[",\n;]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; }).join(',')).join('\n'); }
+$('#expInvCsv').onclick = ()=>{
+  const rows = [['Artista','Álbum','Año','Formato','País','Sello','Catálogo','Código','Categoría','Disco','Portada','Obi','Costo','Precio','Lote','Proveedor','Fecha compra','Estado','Discogs','Notas']];
+  state.items.forEach(i=>rows.push([i.artist,i.album,i.year,i.format,i.country,i.label,i.catno,i.barcode,catOf(i.category).name,i.media,i.sleeve,i.obi?'Sí':'No',i.cost,i.price,i.lot,i.supplier,i.purchasedAt,i.status==='sold'?'Vendido':'En stock',i.releaseId?`https://www.discogs.com/release/${i.releaseId}`:'',i.notes]));
+  download(`noriko-inventario-${today()}.csv`, csv(rows), 'text/csv;charset=utf-8');
+};
+$('#expSalesCsv').onclick = ()=>{
+  const rows = [['Fecha','Artista','Álbum','Categoría','Precio','Costo','Utilidad','Método','Canal','Evento','Comprador','Lote','Notas']];
+  state.items.filter(i=>i.sale).sort((a,b)=>a.sale.date.localeCompare(b.sale.date)).forEach(i=>rows.push([i.sale.date,i.artist,i.album,catOf(i.category).name,i.sale.price,i.cost,num(i.sale.price)-num(i.cost),i.sale.method,i.sale.channel,i.sale.event,i.sale.buyer,i.lot,i.sale.notes]));
+  download(`noriko-ventas-${today()}.csv`, csv(rows), 'text/csv;charset=utf-8');
+};
+$('#wipeBtn').onclick = async ()=>{
+  if(await confirmBox('Borrar todo', 'Se eliminan todos los discos y ventas de este navegador. Descarga un respaldo antes.', 'BORRAR')){
+    const tok = state.settings.token; state = blank(); state.settings.token = tok; save(); renderAll(); toast('Datos borrados');
+  }
+};
+
+/* ---------- Diálogos ---------- */
+$$('dialog [data-close]').forEach(b=>b.addEventListener('click', ()=>b.closest('dialog').close()));
+$$('dialog').forEach(d=>d.addEventListener('click', e=>{ if(e.target===d) d.close(); }));
+
+function renderAll(){
+  renderHeader(); refreshLists();
+  const v = ($('.view.active')||{}).id;
+  if(v==='v-inv') renderInv(); if(v==='v-sales') renderSales(); if(v==='v-stats') renderStats();
+}
+renderAll();
+})();
+</script>
+</body>
+</html>
