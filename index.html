@@ -120,9 +120,36 @@
   tr:last-child td{border-bottom:0}
   .tbl-wrap{overflow-x:auto;margin-bottom:6px}
 
+  /* Pop-up */
+  .reader{position:relative;width:100%;border-radius:10px;overflow:hidden;background:var(--ink);aspect-ratio:4/3;display:none}
+  .reader.on{display:block}
+  .reader video{width:100%;height:100%;object-fit:cover;display:block}
+  .reader .frame{position:absolute;left:7%;right:7%;top:24%;bottom:24%;border:3px solid var(--orange);border-radius:10px;box-shadow:0 0 0 999px rgba(22,19,15,.35);pointer-events:none}
+  .reader .frame::after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:var(--orange);opacity:.85;animation:scanline 1.6s ease-in-out infinite}
+  .reader .status{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:var(--cream);font-size:13px;font-weight:700;text-shadow:0 1px 3px #000;padding:0 10px}
+  .live-band{display:flex;align-items:center;gap:10px;background:var(--blue);color:var(--cream);border:1.5px solid var(--ink);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;box-shadow:3px 3px 0 var(--ink)}
+  .live-dot{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--orange);display:flex;align-items:center;gap:6px}
+  .live-dot::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--orange);animation:blink 1.2s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .live-name{font-weight:900;font-style:italic;font-size:22px;line-height:1.1}
+  .live-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+  .live-kpis div{background:var(--paper);border:1.5px solid var(--ink);border-radius:10px;padding:8px 6px;text-align:center}
+  .live-kpis b{display:block;font-size:18px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .live-kpis span{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700}
+  .big-btn{padding:15px 16px;font-size:17px}
+  .big-input{font-size:30px!important;font-weight:900!important;padding:10px 14px!important}
+  .paygrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .paygrid button{border:1.5px solid var(--ink);background:#fff;border-radius:10px;padding:14px 8px;font-weight:700;font-size:16px;cursor:pointer}
+  .paygrid button.on{background:var(--ink);color:var(--cream)}
+  .bar{height:8px;border-radius:4px;background:#e6dccb;overflow:hidden;margin-top:4px}
+  .bar i{display:block;height:100%;background:var(--blue)}
+  .top-note{background:var(--orange);color:var(--ink);border:1.5px solid var(--ink);border-radius:10px;padding:10px 12px;font-weight:700;margin:12px 0}
+  .past{display:flex;align-items:center;gap:10px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px}
+  .ev-pills{margin:6px 0 0}
+  #popResults{scroll-margin-top:96px}
   /* Nav */
   nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--ink);display:flex;justify-content:space-around;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
-  nav button{background:none;border:0;color:#bdb4a6;font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;cursor:pointer;border-radius:10px;min-width:60px}
+  nav button{background:none;border:0;color:#bdb4a6;font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;cursor:pointer;border-radius:10px;flex:1;min-width:0;max-width:110px}
   nav button svg{width:22px;height:22px}
   nav button.on{color:var(--cream);background:rgba(244,237,225,.1)}
   nav button.on svg{color:var(--orange)}
@@ -167,9 +194,58 @@
 </header>
 
 <main>
+  <!-- POP-UP -->
+  <section class="view" id="v-pop">
+    <div id="popClosed">
+      <h2>Pop-up</h2>
+      <div class="card">
+        <h3 class="mt0">Abrir un pop-up</h3>
+        <p class="small muted mt0">Ponle nombre al evento una vez. Después solo escaneas cada disco que vendas.</p>
+        <form id="popOpenForm" autocomplete="off">
+          <label class="f">Nombre del evento</label>
+          <input type="text" id="popName" list="eventList" required>
+          <label class="f">Fecha</label>
+          <input type="date" id="popDate" required>
+          <button class="btn primary block" type="submit" style="margin-top:14px">Abrir pop-up</button>
+        </form>
+      </div>
+      <h3>Pop-ups anteriores</h3>
+      <div id="popPast"></div>
+    </div>
+
+    <div id="popOpen" hidden>
+      <div class="live-band">
+        <div class="grow"><div class="live-dot">EN VIVO</div><div class="live-name" id="popLiveName"></div></div>
+        <button class="btn sm" id="popCloseBtn">Cerrar pop-up</button>
+      </div>
+      <div class="live-kpis" id="popKpis"></div>
+
+      <div class="card">
+        <div id="popReader" class="reader"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn accent grow big-btn" id="popCamBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+            <span>Escanear venta</span>
+          </button>
+          <label class="btn" title="Leer el código desde una foto">Foto<input type="file" accept="image/*" id="popPhoto" hidden></label>
+        </div>
+        <div id="popCamMsg"></div>
+        <form id="popCodeForm" class="row" style="margin-top:10px" autocomplete="off">
+          <input type="text" inputmode="numeric" enterkeyhint="search" id="popCode" placeholder="Código de barras" class="grow">
+          <button class="btn ink" type="submit">Buscar</button>
+        </form>
+        <label class="f">¿Sin código? Búscalo en tu stock</label>
+        <input type="search" id="popStockSearch" placeholder="Artista o álbum">
+      </div>
+      <div id="popResults"></div>
+      <h3 id="popSalesTitle">Ventas de este pop-up</h3>
+      <div id="popSales"></div>
+    </div>
+  </section>
+
   <!-- ESCANEAR -->
   <section class="view active" id="v-scan">
-    <h2>Escanear</h2>
+    <h2>Agregar discos</h2>
     <div id="tokenNotice"></div>
 
     <div class="card">
@@ -314,7 +390,8 @@
 </main>
 
 <nav id="nav">
-  <button data-v="v-scan" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>Escanear</button>
+  <button data-v="v-pop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l2-6h14l2 6M3 10h18M3 10v2a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0v-2M5 14v7h14v-7M10 21v-4h4v4"/></svg>Pop-up</button>
+  <button data-v="v-scan" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M12 8v8M8 12h8"/></svg>Agregar</button>
   <button data-v="v-inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>Inventario</button>
   <button data-v="v-sales"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12V7H4v13h9"/><path d="M4 7l2-4h12l2 4M15 17h6M18 14v6"/></svg>Ventas</button>
   <button data-v="v-stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Resumen</button>
@@ -324,7 +401,7 @@
 <!-- Diálogo de compra / edición -->
 <dialog id="buyDlg">
   <form id="buyForm" method="dialog" autocomplete="off">
-    <div class="dlg-head"><h4 id="buyTitle">Registrar compra</h4><button type="button" class="x" data-close>×</button></div>
+    <div class="dlg-head"><h4 id="buyTitle">Agregar disco</h4><button type="button" class="x" data-close>×</button></div>
     <div class="dlg-body">
       <div class="rel-box">
         <div class="thumb" id="bThumb">💿</div>
@@ -370,7 +447,7 @@
       <button type="button" class="btn danger" id="bDelete" hidden>Eliminar</button>
       <span class="grow"></span>
       <button type="button" class="btn" data-close>Cancelar</button>
-      <button type="submit" class="btn primary" id="bSave">Guardar</button>
+      <button type="submit" class="btn primary" id="bSave">Agregar</button>
     </div>
   </form>
 </dialog>
@@ -393,6 +470,7 @@
       <label class="f">Canal</label>
       <div class="filters" id="sChanPills"></div>
       <label class="f">Evento</label><input type="text" id="sEvent" list="eventList" placeholder="ej. Pop-up 18 dic">
+      <div class="filters ev-pills" id="sEventPills"></div>
       <label class="f">Comprador (opcional)</label><input type="text" id="sBuyer" placeholder="@usuario o nombre">
       <label class="f">Notas</label><textarea id="sNotes"></textarea>
       <div id="sProfit" class="market"></div>
@@ -404,6 +482,35 @@
       <button type="submit" class="btn accent">Guardar venta</button>
     </div>
   </form>
+</dialog>
+
+<!-- Venta rápida (pop-up) -->
+<dialog id="quickDlg">
+  <form id="quickForm" method="dialog" autocomplete="off">
+    <div class="dlg-head sell"><h4>Venta</h4><span class="small" id="qkEvent"></span></div>
+    <div class="dlg-body">
+      <div class="rel-box">
+        <div class="thumb" id="qkThumb">💿</div>
+        <div class="grow"><div class="it-artist" id="qkArtist"></div><div class="it-title" id="qkAlbum"></div><div class="it-meta" id="qkMeta"></div></div>
+      </div>
+      <label class="f">Precio</label>
+      <input type="number" id="qkPrice" class="big-input" min="0" step="any" inputmode="decimal" required>
+      <div class="small muted" id="qkListPrice"></div>
+      <label class="f">¿Cómo paga?</label>
+      <div class="paygrid" id="qkPay"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn grow big-btn" id="qkCancel">Cancelar</button>
+      <button type="submit" class="btn accent grow big-btn" id="qkSold" disabled>Vendido</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Resumen de pop-up -->
+<dialog id="sumDlg">
+  <div class="dlg-head"><h4 id="sumTitle">Resumen</h4><button type="button" class="x" data-close>×</button></div>
+  <div class="dlg-body" id="sumBody"></div>
+  <div class="dlg-foot"><button class="btn" id="sumCopy">Copiar resumen</button><span class="grow"></span><button class="btn primary" data-close>Listo</button></div>
 </dialog>
 
 <!-- Diálogo de confirmación -->
@@ -437,15 +544,15 @@ const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-const APP_VERSION = 'v2 · 22 nov 2026';
-function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], lastBackup:null}; }
+const APP_VERSION = 'v3 · 22 nov 2026';
+function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null}; }
 function load(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
     if(!raw) return blank();
     const d = JSON.parse(raw);
     const b = blank();
-    return {...b, ...d, settings:{...b.settings, ...(d.settings||{})}, items:Array.isArray(d.items)?d.items:[]};
+    return {...b, ...d, settings:{...b.settings, ...(d.settings||{})}, items:Array.isArray(d.items)?d.items:[], events:Array.isArray(d.events)?d.events:[]};
   }catch(e){ return blank(); }
 }
 function save(){
@@ -562,6 +669,7 @@ function parseResult(x){
     catno: x.catno && x.catno!=='none' ? x.catno : '',
     barcode: (x.barcode||[]).map(digits).find(b=>b.length>=8) || '',
     thumb: x.thumb || x.cover_image || '',
+    styles: ((x.style&&x.style.length)?x.style:(x.genre||[])).slice(0,3),
     country_jp: x.country==='Japan',
   };
 }
@@ -602,6 +710,7 @@ function show(v){
   $$('.view').forEach(s=>s.classList.toggle('active', s.id===v));
   $$('#nav button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
   if(v!=='v-scan') stopCam();
+  if(v==='v-pop') renderPop();
   if(v==='v-inv') renderInv();
   if(v==='v-sales') renderSales();
   if(v==='v-stats') renderStats();
@@ -622,7 +731,8 @@ function refreshLists(){
   const uniq = k => [...new Set(state.items.map(i=>k(i)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   $('#lotList').innerHTML = uniq(i=>i.lot).map(x=>`<option value="${esc(x)}">`).join('');
   $('#supList').innerHTML = uniq(i=>i.supplier).map(x=>`<option value="${esc(x)}">`).join('');
-  $('#eventList').innerHTML = uniq(i=>i.sale&&i.sale.event).map(x=>`<option value="${esc(x)}">`).join('');
+  const evNames = [...new Set([...state.events.map(e=>e.name), ...state.items.map(i=>i.sale&&i.sale.event)].filter(Boolean))];
+  $('#eventList').innerHTML = evNames.map(x=>`<option value="${esc(x)}">`).join('');
 }
 
 /* ---------- Escáner ---------- */
@@ -651,21 +761,26 @@ function pickCode(codes){
   return h ? String(h.rawValue).trim() : null;
 }
 
-const reader = $('#reader');
-let stream=null, scanning=false, rafId=0;
+// Cada pantalla con cámara tiene su "contexto": recuadro de video, botón, mensajes y qué hacer con el código.
+const CAMS = {};
+let cam = null, stream = null, scanning = false, rafId = 0;
+let ignoreCodes = [], ignoreUntil = 0;   // evita releer el disco que acabas de vender
 const frameCanvas = document.createElement('canvas');
 const frameCtx = frameCanvas.getContext('2d', {willReadFrequently:true});
-function camMsg(m){ $('#camMsg').innerHTML = m ? `<div class="notice" style="margin:10px 0 0">${esc(m)}</div>` : ''; }
-function setStatus(m){ const s = reader.querySelector('.status'); if(s) s.textContent = m; }
-function setCamBtn(){ $('#camBtn span').textContent = scanning ? 'Detener cámara' : 'Escanear con cámara'; }
+function camMsgIn(ctx, m){ ctx.msg.innerHTML = m ? `<div class="notice" style="margin:10px 0 0">${esc(m)}</div>` : ''; }
+function camMsg(m){ camMsgIn(CAMS.scan, m); }
+function setStatus(m){ const s = cam && cam.reader.querySelector('.status'); if(s) s.textContent = m; }
+function setCamBtns(){ Object.values(CAMS).forEach(c=>{ const on = scanning && cam===c; c.btn.querySelector('span').textContent = on ? 'Detener cámara' : c.label; }); }
 function stopTracks(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
 
-async function startCam(){
-  camMsg('');
+async function startCam(ctx){
+  if(scanning) await stopCam();
+  camMsgIn(ctx, '');
   if(!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    camMsg('Este navegador no permite usar la cámara aquí. Abre la app desde su dirección https en Safari o Chrome.'); return;
+    camMsgIn(ctx, 'Este navegador no permite usar la cámara aquí. Abre la app desde su dirección https en Safari o Chrome.'); return;
   }
-  scanning = true; setCamBtn();
+  cam = ctx; scanning = true; setCamBtns();
+  const reader = ctx.reader;
   reader.innerHTML = `<video playsinline webkit-playsinline muted autoplay></video><div class="frame"></div><div class="status">Abriendo cámara…</div>`;
   reader.classList.add('on');
   const video = reader.querySelector('video');
@@ -674,14 +789,14 @@ async function startCam(){
     const detP = getDetector();          // empieza a cargar el lector en paralelo
     stream = await navigator.mediaDevices.getUserMedia({audio:false,
       video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
-    if(!scanning){ stopTracks(); return; }
+    if(!scanning || cam!==ctx){ stopTracks(); return; }
     video.srcObject = stream;
     await video.play();
     setStatus('Cargando lector…');
     const det = await detP;
-    if(!scanning) return;
+    if(!scanning || cam!==ctx) return;
     setStatus('Centra el código en el recuadro · si se ve borroso, aleja un poco el disco');
-    loop(video, det);
+    loop(video, det, ctx);
   }catch(e){
     const n = e && e.name;
     const msg = n==='NotAllowedError' ? 'El permiso de cámara está bloqueado para este sitio. Actívalo en los ajustes del navegador y recarga la página.'
@@ -689,13 +804,13 @@ async function startCam(){
               : n==='NotReadableError' ? 'Otra app está usando la cámara. Ciérrala y vuelve a intentar.'
               : (e && e.message) || 'No se pudo abrir la cámara.';
     await stopCam();
-    camMsg(msg + (n ? ` (${n})` : ''));
+    camMsgIn(ctx, msg + (n ? ` (${n})` : ''));
   }
 }
-function loop(video, det){
+function loop(video, det, ctx){
   let busy = false, last = 0;
   const tick = async t => {
-    if(!scanning) return;
+    if(!scanning || cam!==ctx) return;
     rafId = requestAnimationFrame(tick);
     if(busy || t - last < 120 || video.readyState < 2 || !video.videoWidth) return;
     busy = true; last = t;
@@ -707,7 +822,8 @@ function loop(video, det){
       frameCanvas.width = Math.round(cw*s); frameCanvas.height = Math.round(ch*s);
       frameCtx.drawImage(video, (vw-cw)/2, (vh-ch)/2, cw, ch, 0, 0, frameCanvas.width, frameCanvas.height);
       const code = pickCode(await det.detect(frameCanvas));
-      if(code && scanning) onScan(code);
+      if(code && Date.now() < ignoreUntil && ignoreCodes.includes(digits(code))) { busy = false; return; }
+      if(code && scanning && cam===ctx) onScan(code, ctx);
     }catch(e){ /* cuadro ilegible: sigue intentando */ }
     busy = false;
   };
@@ -715,15 +831,14 @@ function loop(video, det){
 }
 async function stopCam(){
   scanning = false; cancelAnimationFrame(rafId); stopTracks();
-  reader.classList.remove('on'); reader.innerHTML = ''; setCamBtn();
+  Object.values(CAMS).forEach(c=>{ c.reader.classList.remove('on'); c.reader.innerHTML=''; });
+  cam = null; setCamBtns();
 }
-async function onScan(text){
+async function onScan(text, ctx){
   if(navigator.vibrate) navigator.vibrate(80);
   await stopCam();
-  $('#barcodeInput').value = text;
-  lookup(text);
+  ctx.onCode(text, 'camera');
 }
-$('#camBtn').addEventListener('click', ()=> scanning ? stopCam() : startCam());
 
 // Leer el código desde una foto (útil si la cámara en vivo falla)
 function fileToImage(f){
@@ -748,16 +863,23 @@ async function decodePhoto(f){
   }
   return null;
 }
-$('#photoInput').addEventListener('change', async e=>{
-  const f = e.target.files[0]; e.target.value=''; if(!f) return;
-  await stopCam(); camMsg('');
-  $('#results').innerHTML = `<p class="muted"><span class="spinner"></span> Leyendo la foto…</p>`;
-  try{
-    const code = await decodePhoto(f);
-    if(!code){ $('#results').innerHTML=''; camMsg('No encontré un código en la foto. Tómala de cerca, derecha y con buena luz, o escribe los números.'); return; }
-    $('#barcodeInput').value = code; lookup(code);
-  }catch(err){ $('#results').innerHTML=''; camMsg(err.message || 'No pude leer la foto.'); }
-});
+function registerCam(key, ctx){
+  CAMS[key] = ctx;
+  ctx.btn.addEventListener('click', ()=> (scanning && cam===ctx) ? stopCam() : startCam(ctx));
+  ctx.photo.addEventListener('change', async e=>{
+    const f = e.target.files[0]; e.target.value=''; if(!f) return;
+    await stopCam(); camMsgIn(ctx, ''); camMsgIn(ctx, '');
+    ctx.msg.innerHTML = `<p class="muted"><span class="spinner"></span> Leyendo la foto…</p>`;
+    try{
+      const code = await decodePhoto(f);
+      ctx.msg.innerHTML = '';
+      if(!code){ camMsgIn(ctx, 'No encontré un código en la foto. Tómala de cerca, derecha y con buena luz, o escribe los números.'); return; }
+      ctx.onCode(code, 'photo');
+    }catch(err){ camMsgIn(ctx, err.message || 'No pude leer la foto.'); }
+  });
+}
+registerCam('scan', {reader:$('#reader'), btn:$('#camBtn'), photo:$('#photoInput'), msg:$('#camMsg'), label:'Escanear con cámara',
+  onCode:(code)=>{ $('#barcodeInput').value = code; lookup(code); }});
 
 function revealResults(){
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // oculta el teclado
@@ -819,7 +941,7 @@ function renderResults(list, code){
           <div class="it-title">${esc(r.album)}</div>
           <div class="it-meta">${[r.year,r.country,r.formatRaw].filter(Boolean).map(esc).join(' · ')}<br>${[r.label,r.catno].filter(Boolean).map(esc).join(' · ')}</div>
           <div class="it-actions">
-            <button class="btn primary sm" data-buy="${ix}">+ Registrar compra</button>
+            <button class="btn primary sm" data-buy="${ix}">+ Agregar al inventario</button>
             <a class="btn sm" href="https://www.discogs.com/release/${r.releaseId}" target="_blank" rel="noopener">Ver en Discogs</a>
           </div>
         </div>
@@ -838,8 +960,8 @@ function openBuy(rel, item){
   editingId = item ? item.id : null;
   buyDraft = rel || {};
   const src = item || rel || {};
-  $('#buyTitle').textContent = item ? 'Editar disco' : 'Registrar compra';
-  $('#bDelete').hidden = !item;
+  $('#buyTitle').textContent = item ? 'Editar disco' : 'Agregar disco';
+  $('#bDelete').hidden = !item; $('#bSave').textContent = item ? 'Guardar' : 'Agregar';
   $('#bQtyWrap').style.visibility = item ? 'hidden' : 'visible';
   $('#bThumb').outerHTML = thumbHtml(src.thumb).replace('class="thumb"','class="thumb" id="bThumb"');
   $('#bRelInfo').innerHTML = src.releaseId ? `Discogs #${src.releaseId}${src.label?' · '+esc(src.label):''}` : 'Sin ficha de Discogs';
@@ -894,7 +1016,7 @@ $('#buyForm').addEventListener('submit', e=>{
     const qty = Math.max(1, Math.min(200, parseInt($('#bQty').value)||1));
     const added = [];
     for(let k=0;k<qty;k++){
-      const it = {id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'',
+      const it = {id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'', styles: buyDraft.styles||[],
         ...base, status:'stock', sale:null, dgInstance:null, dgSync:null, createdAt:new Date().toISOString()};
       state.items.push(it); added.push(it);
     }
@@ -941,7 +1063,17 @@ function openSell(id){
   sChan = s.channel || (prev && prev.sale.channel) || CHANS[0];
   pills($('#sPayPills'), PAYS, sPay, v=>sPay=v);
   pills($('#sChanPills'), CHANS, sChan, v=>sChan=v);
-  $('#sEvent').value = s.event ?? (prev && prev.sale.date===today() ? prev.sale.event||'' : '');
+  const aev = activeEvent();
+  if(!it.sale && aev){ sChan = 'Pop-up'; pills($('#sChanPills'), CHANS, sChan, v=>sChan=v); $('#sDate').value = aev.date; }
+  $('#sEvent').value = it.sale ? (s.event||'') : (aev ? aev.name : (prev && prev.sale.event) || '');
+  const recent = [...new Set([...(aev?[aev.name]:[]), ...[...state.events].sort((a,b)=>(b.openedAt||'').localeCompare(a.openedAt||'')).map(e=>e.name),
+    ...state.items.filter(i=>i.sale&&i.sale.event).sort((a,b)=>(b.sale.at||'').localeCompare(a.sale.at||'')).map(i=>i.sale.event)])].slice(0,4);
+  const evPills = () => {
+    $('#sEventPills').innerHTML = [...recent, 'Sin evento'].map(n=>{ const on = n==='Sin evento' ? !$('#sEvent').value.trim() : $('#sEvent').value.trim()===n;
+      return `<button type="button" class="pill ${on?'on':''}" data-ev="${esc(n)}">${esc(n)}</button>`; }).join('');
+    $$('#sEventPills .pill').forEach(b=>b.onclick=()=>{ $('#sEvent').value = b.dataset.ev==='Sin evento' ? '' : b.dataset.ev; evPills(); });
+  };
+  $('#sEvent').oninput = evPills; evPills();
   $('#sBuyer').value = s.buyer||''; $('#sNotes').value = s.notes||'';
   updProfit();
   refreshLists();
@@ -959,6 +1091,7 @@ $('#sellForm').addEventListener('submit', e=>{
   it.sale = {price:num($('#sPrice').value), date:$('#sDate').value||today(), method:sPay, channel:sChan,
     event:$('#sEvent').value.trim(), buyer:$('#sBuyer').value.trim(), notes:$('#sNotes').value.trim(),
     at: (it.sale && it.sale.at) || new Date().toISOString()};
+  it.sale.eventId = it.sale.event ? eventIdFor(it.sale.event) : null;
   it.status = 'sold';
   save(); $('#sellDlg').close(); renderAll();
   $('#localMatch').innerHTML=''; $('#results').innerHTML=''; $('#barcodeInput').value='';
@@ -1209,6 +1342,205 @@ $('#wipeBtn').onclick = async ()=>{
   }
 };
 
+/* ---------- Pop-up ---------- */
+const activeEvent = () => state.events.find(e=>e.id===state.activeEventId) || null;
+function eventSales(ev){
+  return state.items.filter(i=>i.sale && (i.sale.eventId ? i.sale.eventId===ev.id : (i.sale.event||'')===ev.name))
+    .sort((a,b)=>(b.sale.at||'').localeCompare(a.sale.at||''));
+}
+function eventIdFor(name){
+  const ev = state.events.filter(e=>e.name===name).sort((a,b)=>(b.openedAt||'').localeCompare(a.openedAt||''))[0];
+  return ev ? ev.id : null;
+}
+function defaultEventName(){ return `Pop-up ${fmtDate(today()).replace(/ \d{4}$/,'')}`; }
+
+function renderPop(){
+  const ev = activeEvent();
+  $('#popClosed').hidden = !!ev; $('#popOpen').hidden = !ev;
+  if(!ev){
+    if(!$('#popName').value) $('#popName').value = defaultEventName();
+    if(!$('#popDate').value) $('#popDate').value = today();
+    const past = [...state.events].sort((a,b)=>(b.date+b.openedAt).localeCompare(a.date+a.openedAt));
+    $('#popPast').innerHTML = past.length ? past.map(e=>{
+      const s = eventSales(e), t = s.reduce((x,i)=>x+num(i.sale.price),0);
+      return `<div class="past"><div class="grow"><strong>${esc(e.name)}</strong><div class="small muted">${esc(fmtDate(e.date))} · ${s.length} ${s.length===1?'disco':'discos'} · ${money(t)}</div></div>
+        <button class="btn sm" data-sum="${e.id}">Resumen</button><button class="btn sm ghost" data-reopen="${e.id}">Reabrir</button></div>`;
+    }).join('') : `<div class="empty small">Aquí aparecerán tus pop-ups cerrados con su resumen.</div>`;
+    $$('#popPast [data-sum]').forEach(b=>b.onclick=()=>openSummary(b.dataset.sum));
+    $$('#popPast [data-reopen]').forEach(b=>b.onclick=()=>{ state.activeEventId = b.dataset.reopen; const e=activeEvent(); e.closedAt=null; save(); renderPop(); toast(`“${e.name}” abierto de nuevo`); });
+    return;
+  }
+  $('#popLiveName').textContent = `${ev.name} · ${fmtDate(ev.date)}`;
+  const sales = eventSales(ev), total = sales.reduce((x,i)=>x+num(i.sale.price),0);
+  const by = m => sales.filter(i=>i.sale.method===m).reduce((x,i)=>x+num(i.sale.price),0);
+  const other = total - by('Efectivo') - by('Mercado Pago');
+  $('#popKpis').innerHTML = `
+    <div><b>${sales.length}</b><span>Discos</span></div>
+    <div><b>${money(total)}</b><span>Total</span></div>
+    <div><b>${money(by('Efectivo'))}</b><span>Efectivo</span></div>
+    <div><b>${money(by('Mercado Pago') + other)}</b><span>${other?'MP y otros':'Mercado Pago'}</span></div>`;
+  $('#popSalesTitle').hidden = !sales.length;
+  $('#popSales').innerHTML = sales.map(i=>`
+    <div class="item">${thumbHtml(i.thumb)}
+      <div class="grow">
+        <div class="row" style="align-items:flex-start"><div class="grow"><div class="it-artist">${esc(i.artist)}</div><div class="it-title">${esc(i.album)}</div></div><div class="price">${money(i.sale.price)}</div></div>
+        <div class="it-meta"><span class="chip ${catOf(i.category).cls}">${esc(catOf(i.category).name)}</span>${esc(i.sale.method)}</div>
+        <div class="it-actions"><button class="btn sm danger" data-undo="${i.id}">Anular</button></div>
+      </div></div>`).join('');
+  $$('#popSales [data-undo]').forEach(b=>b.onclick=()=>undoSale(b.dataset.undo));
+}
+async function undoSale(id){
+  const it = state.items.find(i=>i.id===id); if(!it || !it.sale) return;
+  if(!(await confirmBox('Anular venta', `“${it.artist} – ${it.album}” regresa al stock.`))) return;
+  it.sale = null; it.status = 'stock'; save(); renderAll(); renderPop(); toast('Venta anulada, regresa a stock');
+  if(syncOn() && it.releaseId) setTimeout(()=>syncItems([it]), 1200);
+}
+$('#popOpenForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const name = $('#popName').value.trim() || defaultEventName();
+  const ev = {id:uid(), name, date:$('#popDate').value || today(), openedAt:new Date().toISOString(), closedAt:null};
+  state.events.push(ev); state.activeEventId = ev.id; save();
+  $('#popName').value = ''; $('#popDate').value = '';
+  renderPop(); refreshLists(); toast(`Pop-up abierto: ${name}`);
+});
+$('#popCloseBtn').addEventListener('click', async ()=>{
+  const ev = activeEvent(); if(!ev) return;
+  const n = eventSales(ev).length;
+  if(!(await confirmBox('Cerrar pop-up', `Se cierra “${ev.name}” con ${n} ${n===1?'venta':'ventas'}. Podrás ver el resumen y reabrirlo si te faltó algo.`))) return;
+  await stopCam();
+  ev.closedAt = new Date().toISOString(); state.activeEventId = null; save();
+  renderPop(); openSummary(ev.id);
+});
+
+// Buscar el disco escaneado en el stock
+let lastSource = null;
+function popLookup(code, source){
+  lastSource = source || null;
+  $('#popCode').value = '';
+  const c = digits(code);
+  if(c.length < 6){ popNotice(`“${esc(code)}” no parece un código completo. Suelen ser 12 o 13 números.`); return; }
+  const vars = barcodeVariants(c);
+  const stock = state.items.filter(i=>i.status==='stock' && vars.includes(digits(i.barcode)));
+  if(stock.length===1){ $('#popResults').innerHTML=''; return openQuickSell(stock[0].id); }
+  if(stock.length>1){
+    const samePrice = stock.every(i=>num(i.price)===num(stock[0].price) && i.media===stock[0].media && i.sleeve===stock[0].sleeve && !!i.obi===!!stock[0].obi);
+    if(samePrice){ $('#popResults').innerHTML=''; return openQuickSell(stock[0].id); }
+    $('#popResults').innerHTML = `<h3>Tienes ${stock.length} copias · ¿cuál vendiste?</h3><div class="list">${stock.map(i=>pickCard(i)).join('')}</div>`;
+    bindPick(); revealPop(); return;
+  }
+  const sold = state.items.filter(i=>i.status==='sold' && vars.includes(digits(i.barcode)));
+  popNotice(`Este disco (${esc(c)}) no está en tu stock.${sold.length?` Ya vendiste ${sold.length} ${sold.length===1?'copia':'copias'}.`:''}
+    <div class="row wrap" style="margin-top:10px"><button class="btn sm ink" id="popAddIt">Agregarlo al inventario</button><button class="btn sm" id="popAgain">Escanear otro</button></div>`);
+  $('#popAddIt').onclick = ()=>{ show('v-scan'); $('#barcodeInput').value = c; lookup(c); };
+  $('#popAgain').onclick = ()=>{ $('#popResults').innerHTML=''; startCam(CAMS.pop); };
+}
+function popNotice(html){ $('#popResults').innerHTML = `<div class="notice">${html}</div>`; revealPop(); }
+function revealPop(){
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  setTimeout(()=>$('#popResults').scrollIntoView({behavior:'smooth', block:'start'}), 60);
+}
+function pickCard(i){
+  return `<div class="item">${thumbHtml(i.thumb)}<div class="grow">
+    <div class="row" style="align-items:flex-start"><div class="grow"><div class="it-artist">${esc(i.artist)}</div><div class="it-title">${esc(i.album)}</div></div><div class="price">${i.price?money(i.price):'—'}</div></div>
+    <div class="it-meta">${[i.format, i.year, `${i.media}/${i.sleeve}`, i.obi?'con obi':''].filter(Boolean).map(esc).join(' · ')}</div>
+    <div class="it-actions"><button class="btn accent sm" data-pick="${i.id}">Vender este</button></div></div></div>`;
+}
+function bindPick(){ $$('#popResults [data-pick]').forEach(b=>b.onclick=()=>{ $('#popResults').innerHTML=''; openQuickSell(b.dataset.pick); }); }
+$('#popCodeForm').addEventListener('submit', e=>{ e.preventDefault(); const c=$('#popCode').value.trim(); if(c) popLookup(c, 'typed'); });
+$('#popStockSearch').addEventListener('input', e=>{
+  const q = e.target.value.trim().toLowerCase();
+  if(q.length < 2){ $('#popResults').innerHTML=''; return; }
+  const list = state.items.filter(i=>i.status==='stock' && [i.artist,i.album,i.catno].join(' ').toLowerCase().includes(q)).slice(0,8);
+  $('#popResults').innerHTML = list.length ? `<div class="list">${list.map(i=>pickCard(i)).join('')}</div>` : `<div class="empty small">Nada en tu stock con “${esc(q)}”.</div>`;
+  lastSource = 'search'; bindPick();
+});
+
+// Pantalla de venta rápida
+let qkId = null, qkPay = null;
+function openQuickSell(id){
+  const it = state.items.find(i=>i.id===id), ev = activeEvent(); if(!it || !ev) return;
+  qkId = id; qkPay = null;
+  $('#qkEvent').textContent = ev.name;
+  $('#qkThumb').outerHTML = thumbHtml(it.thumb).replace('class="thumb"','class="thumb" id="qkThumb"');
+  $('#qkArtist').textContent = it.artist; $('#qkAlbum').textContent = it.album;
+  $('#qkMeta').innerHTML = `<span class="chip ${catOf(it.category).cls}">${esc(catOf(it.category).name)}</span>` + esc([it.format, it.year, `${it.media}/${it.sleeve}`, it.obi?'con obi':''].filter(Boolean).join(' · '));
+  $('#qkPrice').value = it.price || '';
+  $('#qkListPrice').textContent = it.price ? `Precio de lista ${money(it.price)} · cámbialo si haces descuento` : 'Este disco no tiene precio de lista';
+  $('#qkPay').innerHTML = PAYS.map(p=>`<button type="button" data-p="${esc(p)}">${esc(p)}</button>`).join('');
+  $$('#qkPay button').forEach(b=>b.onclick=()=>{ qkPay=b.dataset.p; $$('#qkPay button').forEach(x=>x.classList.toggle('on', x===b)); updQk(); });
+  updQk();
+  $('#quickDlg').showModal();
+}
+function updQk(){ $('#qkSold').disabled = !qkPay || $('#qkPrice').value===''; $('#qkSold').textContent = qkPay ? `Vendido · ${money(num($('#qkPrice').value))}` : 'Elige cómo paga'; }
+$('#qkPrice').addEventListener('input', updQk);
+function afterQuick(){
+  const it = state.items.find(i=>i.id===qkId);
+  if(it && it.barcode){ ignoreCodes = barcodeVariants(it.barcode); ignoreUntil = Date.now() + 5000; }
+  renderPop(); $('#popStockSearch').value = '';
+  if(lastSource==='camera') setTimeout(()=>startCam(CAMS.pop), 350);   // listo para el siguiente disco
+}
+$('#qkCancel').addEventListener('click', ()=>{ $('#quickDlg').close(); afterQuick(); });
+$('#quickForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const it = state.items.find(i=>i.id===qkId), ev = activeEvent();
+  if(!it || !ev || !qkPay) return;
+  it.sale = {price:num($('#qkPrice').value), date:ev.date, method:qkPay, channel:'Pop-up', event:ev.name, eventId:ev.id,
+    buyer:'', notes:'', at:new Date().toISOString()};
+  it.status = 'sold'; save();
+  $('#quickDlg').close(); renderAll();
+  toast(`Vendido · ${money(it.sale.price)} · ${qkPay}`);
+  afterQuick();
+  if(syncOn() && it.dgInstance) setTimeout(()=>syncItems([it], true).then(r=>{ if(r.fail) toast('No se pudo quitar de tu colección de Discogs. Usa “Reintentar” en Inventario.', true); }), 1500);
+});
+
+// Resumen del pop-up
+let sumText = '';
+function openSummary(id){
+  const ev = state.events.find(e=>e.id===id); if(!ev) return;
+  const sales = eventSales(ev);
+  const total = sales.reduce((x,i)=>x+num(i.sale.price),0), cost = sales.reduce((x,i)=>x+num(i.cost),0);
+  const avg = sales.length ? total/sales.length : 0;
+  const pct = v => total ? Math.round(v/total*100) : 0;
+  const groupBy = f => { const m=new Map(); sales.forEach(i=>{ const k=f(i); const g=m.get(k)||{n:0,t:0}; g.n++; g.t+=num(i.sale.price); m.set(k,g); }); return [...m].sort((a,b)=>b[1].t-a[1].t || b[1].n-a[1].n); };
+  const pays = groupBy(i=>i.sale.method||'—');
+  const cats = groupBy(i=>i.category);
+  const styles = (()=>{ const m=new Map(); sales.forEach(i=>(i.styles&&i.styles.length?i.styles:['Sin género']).forEach(st=>m.set(st,(m.get(st)||0)+1))); return [...m].sort((a,b)=>(a[0]==='Sin género')-(b[0]==='Sin género') || b[1]-a[1]).slice(0,5); })();
+  const top = [...sales].sort((a,b)=>num(b.sale.price)-num(a.sale.price))[0];
+  const rows = (list, label) => list.map(([k,g])=>`<tr><td>${label(k)}<div class="bar"><i style="width:${pct(g.t)}%"></i></div></td><td class="n">${g.n}</td><td class="n">${money(g.t)}</td><td class="n">${pct(g.t)}%</td></tr>`).join('');
+  $('#sumTitle').textContent = ev.name;
+  if(!sales.length){ $('#sumBody').innerHTML = `<div class="empty">No hubo ventas en este pop-up.</div>`; sumText = `${ev.name} (${fmtDate(ev.date)}): sin ventas.`; $('#sumDlg').showModal(); return; }
+  const bestCat = cats[0] ? catOf(cats[0][0]).name : '';
+  $('#sumBody').innerHTML = `
+    <div class="small muted" style="margin-bottom:10px">${esc(fmtDate(ev.date))}${ev.closedAt?'':' · en curso'}</div>
+    <div class="kpis">
+      <div class="kpi blue"><div class="k">Total vendido</div><div class="v">${money(total)}</div><div class="s">${sales.length} ${sales.length===1?'disco':'discos'}</div></div>
+      <div class="kpi"><div class="k">Ticket promedio</div><div class="v">${money(avg)}</div></div>
+      <div class="kpi"><div class="k">Utilidad</div><div class="v">${money(total-cost)}</div><div class="s">costo ${money(cost)}</div></div>
+    </div>
+    ${cats.length>1?`<div class="top-note">${esc(bestCat)} fue lo que más dejó: ${pct(cats[0][1].t)}% de lo vendido.</div>`:''}
+    <h3>Por forma de pago</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>Método</th><th class="n">Discos</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>${rows(pays, k=>esc(k))}</tbody></table></div>
+    <h3>Por categoría</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>Categoría</th><th class="n">Discos</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>${rows(cats, k=>`<span class="chip ${catOf(k).cls}">${esc(catOf(k).name)}</span>`)}</tbody></table></div>
+    <h3>Géneros más vendidos</h3>
+    <div class="small">${styles.map(([k,n])=>`<span class="chip" style="margin-bottom:6px">${esc(k)} · ${n}</span>`).join(' ')}</div>
+    ${top?`<h3>Disco más caro</h3><div class="item">${thumbHtml(top.thumb)}<div class="grow"><div class="it-artist">${esc(top.artist)}</div><div class="it-title">${esc(top.album)}</div><div class="price" style="margin-top:4px">${money(top.sale.price)}</div></div></div>`:''}
+    <h3>Discos vendidos</h3>
+    <div class="tbl-wrap"><table><tbody>${sales.map(i=>`<tr><td><strong>${esc(i.artist)}</strong> · ${esc(i.album)}</td><td class="n">${money(i.sale.price)}</td></tr>`).join('')}</tbody></table></div>`;
+  sumText = [`${ev.name} · ${fmtDate(ev.date)}`, `Total: ${money(total)} · ${sales.length} discos · ticket promedio ${money(avg)} · utilidad ${money(total-cost)}`,
+    'Pago: ' + pays.map(([k,g])=>`${k} ${money(g.t)} (${g.n})`).join(' · '),
+    'Categorías: ' + cats.map(([k,g])=>`${catOf(k).name} ${money(g.t)} (${pct(g.t)}%)`).join(' · '),
+    'Géneros: ' + styles.map(([k,n])=>`${k} ${n}`).join(' · '),
+    top ? `Más caro: ${top.artist} – ${top.album} (${money(top.sale.price)})` : ''].filter(Boolean).join('\n');
+  $('#sumDlg').showModal();
+}
+$('#sumCopy').addEventListener('click', async ()=>{
+  try{ await navigator.clipboard.writeText(sumText); toast('Resumen copiado'); }
+  catch(e){ toast('No se pudo copiar en este navegador', true); }
+});
+registerCam('pop', {reader:$('#popReader'), btn:$('#popCamBtn'), photo:$('#popPhoto'), msg:$('#popCamMsg'), label:'Escanear venta',
+  onCode:(code, source)=>popLookup(code, source==='camera'?'camera':'photo')});
+
 /* ---------- Diálogos ---------- */
 $$('dialog [data-close]').forEach(b=>b.addEventListener('click', ()=>b.closest('dialog').close()));
 $$('dialog').forEach(d=>d.addEventListener('click', e=>{ if(e.target===d) d.close(); }));
@@ -1216,9 +1548,9 @@ $$('dialog').forEach(d=>d.addEventListener('click', e=>{ if(e.target===d) d.clos
 function renderAll(){
   renderHeader(); refreshLists();
   const v = ($('.view.active')||{}).id;
-  if(v==='v-inv') renderInv(); if(v==='v-sales') renderSales(); if(v==='v-stats') renderStats();
+  if(v==='v-pop') renderPop(); if(v==='v-inv') renderInv(); if(v==='v-sales') renderSales(); if(v==='v-stats') renderStats();
 }
-renderAll();
+if(activeEvent()) show('v-pop'); else renderAll();
 })();
 </script>
 </body>
