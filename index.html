@@ -10,7 +10,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,500;0,700;0,900;1,900&family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root{
     --blue:#0F04F2; --orange:#FE3D1E; --cream:#F4EDE1; --ink:#16130F;
@@ -69,9 +68,16 @@
   .btn:disabled{opacity:.45;cursor:default}
 
   /* Scanner */
-  #reader{width:100%;border-radius:10px;overflow:hidden;background:var(--ink);min-height:0}
-  #reader video{border-radius:10px}
-  #reader:empty{display:none}
+  #reader{position:relative;width:100%;border-radius:10px;overflow:hidden;background:var(--ink);aspect-ratio:4/3;display:none}
+  #reader.on{display:block}
+  #reader video{width:100%;height:100%;object-fit:cover;display:block}
+  #reader .frame{position:absolute;left:7%;right:7%;top:24%;bottom:24%;border:3px solid var(--orange);border-radius:10px;box-shadow:0 0 0 999px rgba(22,19,15,.35);pointer-events:none}
+  #reader .frame::after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:var(--orange);opacity:.85;animation:scanline 1.6s ease-in-out infinite}
+  @keyframes scanline{0%,100%{transform:translateY(-22px)}50%{transform:translateY(22px)}}
+  #reader .status{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:var(--cream);font-size:13px;font-weight:700;text-shadow:0 1px 3px #000;padding:0 10px}
+  #localMatch,#results{scroll-margin-top:96px}
+  .chip.dg{background:#fff;color:var(--ok);border-color:var(--ok)}
+  .chip.dg-warn{background:#fff3ef;color:#b3170a;border-color:#b3170a}
   .scan-hint{font-size:13px;color:var(--muted);margin-top:8px}
   details summary{cursor:pointer;font-weight:700;padding:4px 0}
 
@@ -136,7 +142,7 @@
   .check{display:flex;gap:8px;align-items:center;margin-top:12px;font-weight:700}
   .check input{width:20px;height:20px}
 
-  .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--cream);padding:10px 16px;border-radius:10px;font-weight:700;opacity:0;transition:.25s;z-index:100;max-width:90vw;text-align:center}
+  .toast{position:fixed;left:50%;top:calc(78px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--ink);color:var(--cream);padding:10px 16px;border-radius:10px;font-weight:700;opacity:0;transition:.25s;z-index:100;max-width:90vw;text-align:center}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .toast.err{background:#b3170a}
   .empty{text-align:center;color:var(--muted);padding:26px 10px;border:1.5px dashed var(--line);border-radius:var(--radius)}
@@ -175,11 +181,12 @@
         </button>
         <label class="btn" title="Leer el código desde una foto">
           Foto
-          <input type="file" accept="image/*" capture="environment" id="photoInput" hidden>
+          <input type="file" accept="image/*" id="photoInput" hidden>
         </label>
       </div>
+      <div id="camMsg"></div>
       <form id="barcodeForm" class="row" style="margin-top:10px" autocomplete="off">
-        <input type="text" inputmode="numeric" id="barcodeInput" placeholder="Código de barras (o usa un lector USB)" class="grow">
+        <input type="text" inputmode="numeric" enterkeyhint="search" id="barcodeInput" placeholder="Código de barras (o usa un lector USB)" class="grow">
         <button class="btn ink" type="submit">Buscar</button>
       </form>
       <div class="scan-hint">Un lector de códigos USB o Bluetooth funciona aquí: escribe el código y da Enter solo.</div>
@@ -269,6 +276,22 @@
     </div>
 
     <div class="card">
+      <h3 class="mt0">Colección de Discogs</h3>
+      <p class="small muted mt0">Al registrar una compra, el disco se agrega a la colección de la cuenta dueña del token. Al venderlo, se quita. Ponerlo en venta en Discogs lo decides tú desde la web.</p>
+      <label class="check"><input type="checkbox" id="setSync"> Sincronizar con mi colección</label>
+      <div id="syncBox" hidden>
+        <div class="small" id="syncUser" style="margin-top:8px"></div>
+        <label class="f">Carpeta donde se agregan</label>
+        <div class="row">
+          <select id="setFolder" class="grow"></select>
+          <button class="btn sm" type="button" id="loadFolders">Actualizar</button>
+        </div>
+        <button class="btn block" type="button" id="syncPendingBtn" style="margin-top:12px">Sincronizar pendientes</button>
+        <div id="syncResult" class="small" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3 class="mt0">Respaldo</h3>
       <p class="small muted mt0">Los datos viven en este navegador. Descarga un respaldo seguido, sobre todo después de cada pop-up. Con el mismo archivo puedes pasar el inventario a otro teléfono o computadora.</p>
       <div class="row wrap">
@@ -286,7 +309,7 @@
       <h3 class="mt0">Zona de riesgo</h3>
       <button class="btn danger" id="wipeBtn">Borrar todos los datos</button>
     </div>
-    <p class="small muted">NORiKO Records · We dig, you find.</p>
+    <p class="small muted">NORiKO Records · We dig, you find. · <span id="appVersion"></span></p>
   </section>
 </main>
 
@@ -414,7 +437,8 @@ const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180}, items:[], lastBackup:null}; }
+const APP_VERSION = 'v2 · 22 nov 2026';
+function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], lastBackup:null}; }
 function load(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
@@ -468,19 +492,60 @@ function download(name, text, type){
 
 /* ---------- Discogs ---------- */
 const API = 'https://api.discogs.com';
-async function dg(path, params={}){
+async function dg(path, params={}, method='GET'){
   const tok = state.settings.token;
   if(!tok) throw new Error('Falta el token de Discogs (Ajustes).');
   const url = new URL(API + path);
   Object.entries({...params, token:tok}).forEach(([k,v])=>{ if(v!==undefined && v!=='') url.searchParams.set(k,v); });
   let r;
-  try{ r = await fetch(url.toString()); }
-  catch(e){ throw new Error('Sin conexión con Discogs. Revisa tu internet.'); }
+  try{ r = await fetch(url.toString(), {method}); }
+  catch(e){ throw new Error(method==='GET' ? 'Sin conexión con Discogs. Revisa tu internet.' : 'Discogs no aceptó el cambio desde el navegador o no hay conexión.'); }
   if(r.status===401) throw new Error('Token de Discogs inválido. Revísalo en Ajustes.');
+  if(r.status===403) throw new Error('Discogs negó el permiso. ¿El token es de la cuenta correcta?');
   if(r.status===429) throw new Error('Discogs pide esperar un minuto (límite de consultas).');
-  if(r.status===404) return null;
+  if(r.status===404) return method==='DELETE' ? {} : null;
   if(!r.ok) throw new Error('Discogs respondió con error ' + r.status);
-  return r.json();
+  if(r.status===204) return {};
+  const t = await r.text();
+  return t ? JSON.parse(t) : {};
+}
+
+/* ---------- Colección de Discogs ---------- */
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const syncOn = () => !!(state.settings.sync && state.settings.username && state.settings.token);
+function collPath(user, folder){ return `/users/${encodeURIComponent(user)}/collection/folders/${folder}`; }
+async function dgAdd(it){
+  const u = state.settings.username, f = state.settings.folderId || 1;
+  const d = await dg(`${collPath(u,f)}/releases/${it.releaseId}`, {}, 'POST');
+  if(!d || !d.instance_id) throw new Error('Discogs no confirmó el alta en la colección.');
+  it.dgInstance = d.instance_id; it.dgFolder = f; it.dgUser = u; it.dgSync = 'ok';
+}
+async function dgRemove(it){
+  await dg(`${collPath(it.dgUser || state.settings.username, it.dgFolder || 1)}/releases/${it.releaseId}/instances/${it.dgInstance}`, {}, 'DELETE');
+  it.dgInstance = null; it.dgSync = 'ok';
+}
+function pendingOp(it){
+  if(!it.releaseId) return null;
+  if(it.status==='stock' && !it.dgInstance) return 'add';
+  if(it.status==='sold' && it.dgInstance) return 'remove';
+  return null;
+}
+async function syncItems(items, quiet){
+  if(!syncOn()) return {ok:0, fail:0};
+  let ok=0, fail=0, lastOp='', lastErr='', n=0;
+  for(const it of items){
+    const op = pendingOp(it); if(!op) continue;
+    if(n++) await sleep(1100);           // Discogs permite ~60 consultas por minuto
+    try{ op==='add' ? await dgAdd(it) : await dgRemove(it); ok++; lastOp=op; }
+    catch(e){ it.dgSync = op + '-failed'; fail++; lastErr = e.message; }
+    save();
+  }
+  renderAll();
+  if(!quiet){
+    if(fail) toast(`Discogs: ${fail} sin sincronizar. ${lastErr}`, true);
+    else if(ok) toast(lastOp==='add' ? (ok>1?`${ok} discos agregados a tu colección de Discogs`:'También quedó en tu colección de Discogs') : 'Quitado de tu colección de Discogs');
+  }
+  return {ok, fail, lastErr};
 }
 function parseResult(x){
   const [artistRaw, ...rest] = String(x.title||'').split(' - ');
@@ -561,28 +626,96 @@ function refreshLists(){
 }
 
 /* ---------- Escáner ---------- */
-let scanner = null, scanning = false;
-function scannerFormats(){
-  const F = window.Html5QrcodeSupportedFormats;
-  return F ? [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39] : undefined;
+// Lector: usa el BarcodeDetector nativo si existe (Android/Chrome); si no (iPhone),
+// carga el lector ZXing (WebAssembly) desde jsDelivr la primera vez que se usa.
+const FORMATS = ['ean_13','ean_8','upc_a','upc_e','code_128','code_39'];
+const PONYFILL = 'https://cdn.jsdelivr.net/npm/barcode-detector@3.2.4/dist/iife/ponyfill.js';
+let detectorP = null;
+function loadScript(src){
+  return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.async=true;
+    s.onload=res; s.onerror=()=>rej(new Error('No cargó el lector de códigos. Revisa tu conexión.')); document.head.appendChild(s); });
 }
+function getDetector(){
+  if(!detectorP) detectorP = (async()=>{
+    if('BarcodeDetector' in window){
+      try{ const f = await window.BarcodeDetector.getSupportedFormats();
+        if(f.includes('ean_13')) return new window.BarcodeDetector({formats:FORMATS.filter(x=>f.includes(x))}); }catch(e){}
+    }
+    if(!window.BarcodeDetectionAPI) await loadScript(PONYFILL);
+    return new window.BarcodeDetectionAPI.BarcodeDetector({formats:FORMATS});
+  })().catch(e=>{ detectorP=null; throw e; });
+  return detectorP;
+}
+function pickCode(codes){
+  const h = (codes||[]).find(c=>digits(c.rawValue).length>=8) || (codes||[])[0];
+  return h ? String(h.rawValue).trim() : null;
+}
+
+const reader = $('#reader');
+let stream=null, scanning=false, rafId=0;
+const frameCanvas = document.createElement('canvas');
+const frameCtx = frameCanvas.getContext('2d', {willReadFrequently:true});
+function camMsg(m){ $('#camMsg').innerHTML = m ? `<div class="notice" style="margin:10px 0 0">${esc(m)}</div>` : ''; }
+function setStatus(m){ const s = reader.querySelector('.status'); if(s) s.textContent = m; }
+function setCamBtn(){ $('#camBtn span').textContent = scanning ? 'Detener cámara' : 'Escanear con cámara'; }
+function stopTracks(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
+
 async function startCam(){
-  if(!window.Html5Qrcode){ toast('No cargó el lector de códigos. Revisa tu conexión.', true); return; }
+  camMsg('');
+  if(!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    camMsg('Este navegador no permite usar la cámara aquí. Abre la app desde su dirección https en Safari o Chrome.'); return;
+  }
+  scanning = true; setCamBtn();
+  reader.innerHTML = `<video playsinline webkit-playsinline muted autoplay></video><div class="frame"></div><div class="status">Abriendo cámara…</div>`;
+  reader.classList.add('on');
+  const video = reader.querySelector('video');
+  video.muted = true; video.setAttribute('playsinline','');
   try{
-    scanner = scanner || new Html5Qrcode('reader', {formatsToSupport: scannerFormats(), verbose:false,
-      experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
-    await scanner.start({facingMode:'environment'},
-      {fps:12, qrbox:(w,h)=>({width:Math.min(w*0.85,320), height:Math.min(h*0.45,150)}), aspectRatio:1.6},
-      onScan, ()=>{});
-    scanning = true; $('#camBtn span').textContent = 'Detener cámara';
+    const detP = getDetector();          // empieza a cargar el lector en paralelo
+    stream = await navigator.mediaDevices.getUserMedia({audio:false,
+      video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
+    if(!scanning){ stopTracks(); return; }
+    video.srcObject = stream;
+    await video.play();
+    setStatus('Cargando lector…');
+    const det = await detP;
+    if(!scanning) return;
+    setStatus('Centra el código en el recuadro · si se ve borroso, aleja un poco el disco');
+    loop(video, det);
   }catch(e){
-    scanning = false;
-    toast('No se pudo abrir la cámara. Revisa permisos (la app debe abrirse con https).', true);
+    const n = e && e.name;
+    const msg = n==='NotAllowedError' ? 'El permiso de cámara está bloqueado para este sitio. Actívalo en los ajustes del navegador y recarga la página.'
+              : n==='NotFoundError' ? 'No encontré una cámara en este dispositivo.'
+              : n==='NotReadableError' ? 'Otra app está usando la cámara. Ciérrala y vuelve a intentar.'
+              : (e && e.message) || 'No se pudo abrir la cámara.';
+    await stopCam();
+    camMsg(msg + (n ? ` (${n})` : ''));
   }
 }
+function loop(video, det){
+  let busy = false, last = 0;
+  const tick = async t => {
+    if(!scanning) return;
+    rafId = requestAnimationFrame(tick);
+    if(busy || t - last < 120 || video.readyState < 2 || !video.videoWidth) return;
+    busy = true; last = t;
+    try{
+      // Recorta la zona central (donde está el recuadro) y la reduce para leer rápido.
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const cw = Math.round(vw*0.9), ch = Math.round(vh*0.6);
+      const s = Math.min(1, 1280/cw);
+      frameCanvas.width = Math.round(cw*s); frameCanvas.height = Math.round(ch*s);
+      frameCtx.drawImage(video, (vw-cw)/2, (vh-ch)/2, cw, ch, 0, 0, frameCanvas.width, frameCanvas.height);
+      const code = pickCode(await det.detect(frameCanvas));
+      if(code && scanning) onScan(code);
+    }catch(e){ /* cuadro ilegible: sigue intentando */ }
+    busy = false;
+  };
+  rafId = requestAnimationFrame(tick);
+}
 async function stopCam(){
-  if(scanner && scanning){ try{ await scanner.stop(); scanner.clear(); }catch(e){} }
-  scanning = false; $('#camBtn span').textContent = 'Escanear con cámara';
+  scanning = false; cancelAnimationFrame(rafId); stopTracks();
+  reader.classList.remove('on'); reader.innerHTML = ''; setCamBtn();
 }
 async function onScan(text){
   if(navigator.vibrate) navigator.vibrate(80);
@@ -591,23 +724,59 @@ async function onScan(text){
   lookup(text);
 }
 $('#camBtn').addEventListener('click', ()=> scanning ? stopCam() : startCam());
+
+// Leer el código desde una foto (útil si la cámara en vivo falla)
+function fileToImage(f){
+  return new Promise((res,rej)=>{ const u=URL.createObjectURL(f), im=new Image();
+    im.onload=()=>{ URL.revokeObjectURL(u); res(im); }; im.onerror=()=>{ URL.revokeObjectURL(u); rej(new Error('No pude abrir la foto.')); }; im.src=u; });
+}
+async function decodePhoto(f){
+  const det = await getDetector();
+  let img;
+  try{ img = await createImageBitmap(f, {imageOrientation:'from-image'}); }
+  catch(e){ img = await fileToImage(f); }
+  const W = img.width || img.naturalWidth, H = img.height || img.naturalHeight;
+  for(const max of [1600, 2600, 1000]){
+    for(const rot of [0, 90]){
+      const s = Math.min(1, max/Math.max(W,H)), w = Math.round(W*s), h = Math.round(H*s);
+      const c = document.createElement('canvas'), x = c.getContext('2d');
+      if(rot){ c.width=h; c.height=w; x.translate(h,0); x.rotate(Math.PI/2); } else { c.width=w; c.height=h; }
+      x.drawImage(img, 0, 0, w, h);
+      const code = pickCode(await det.detect(c));
+      if(code) return code;
+    }
+  }
+  return null;
+}
 $('#photoInput').addEventListener('change', async e=>{
   const f = e.target.files[0]; e.target.value=''; if(!f) return;
-  if(!window.Html5Qrcode){ toast('No cargó el lector de códigos.', true); return; }
-  await stopCam();
+  await stopCam(); camMsg('');
+  $('#results').innerHTML = `<p class="muted"><span class="spinner"></span> Leyendo la foto…</p>`;
   try{
-    const h = new Html5Qrcode('reader', {formatsToSupport: scannerFormats(), verbose:false});
-    const code = await h.scanFile(f, false); h.clear();
+    const code = await decodePhoto(f);
+    if(!code){ $('#results').innerHTML=''; camMsg('No encontré un código en la foto. Tómala de cerca, derecha y con buena luz, o escribe los números.'); return; }
     $('#barcodeInput').value = code; lookup(code);
-  }catch(err){ toast('No encontré un código en la foto. Intenta más cerca y con buena luz.', true); }
+  }catch(err){ $('#results').innerHTML=''; camMsg(err.message || 'No pude leer la foto.'); }
 });
-$('#barcodeForm').addEventListener('submit', e=>{ e.preventDefault(); const c=$('#barcodeInput').value.trim(); if(c) lookup(c); });
+
+function revealResults(){
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // oculta el teclado
+  const target = $('#localMatch').innerHTML.trim() ? $('#localMatch') : $('#results');
+  setTimeout(()=>target.scrollIntoView({behavior:'smooth', block:'start'}), 60);
+}
+$('#barcodeForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const c = $('#barcodeInput').value.trim();
+  if(!c){ toast('Escribe o escanea un código'); $('#barcodeInput').focus(); return; }
+  lookup(c);
+});
 $('#textForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const a=$('#qArtist').value.trim(), t=$('#qTitle').value.trim(), c=$('#qCatno').value.trim();
   if(!a && !t && !c){ toast('Escribe artista, álbum o catálogo'); return; }
   $('#localMatch').innerHTML='';
   $('#results').innerHTML = `<p class="muted"><span class="spinner"></span> Buscando en Discogs…</p>`;
+  revealResults();
   try{ renderResults(await searchText(a,t,c), null); }
   catch(err){ $('#results').innerHTML = `<div class="notice">${esc(err.message)}</div>`; }
 });
@@ -616,7 +785,7 @@ $('#manualBtn').addEventListener('click', ()=> openBuy({artist:$('#qArtist').val
 let lastResults = [];
 async function lookup(code){
   const c = digits(code);
-  if(c.length < 6){ toast('Ese código no parece válido'); return; }
+  if(c.length < 6){ $('#results').innerHTML = `<div class="notice">“${esc(code)}” no parece un código de barras completo. Suelen ser 12 o 13 números.</div>`; revealResults(); return; }
   // 1) ¿Ya está en tu inventario?
   const vars = barcodeVariants(c);
   const mine = state.items.filter(i=>i.status==='stock' && vars.includes(digits(i.barcode)));
@@ -627,8 +796,9 @@ async function lookup(code){
     </div>` : '';
   bindItemButtons($('#localMatch'));
   // 2) Discogs
-  if(!state.settings.token){ $('#results').innerHTML = mine.length?'':`<div class="notice">Agrega tu token de Discogs en Ajustes para identificar el disco, o usa “Agregar manual”.</div>`; return; }
+  if(!state.settings.token){ $('#results').innerHTML = `<div class="notice">Agrega tu token de Discogs en Ajustes para identificar el disco, o usa “Agregar manual”.</div>`; revealResults(); return; }
   $('#results').innerHTML = `<p class="muted"><span class="spinner"></span> Buscando ${esc(c)} en Discogs…</p>`;
+  revealResults();
   try{ renderResults(await searchBarcode(c), c); }
   catch(err){ $('#results').innerHTML = `<div class="notice">${esc(err.message)}</div>`; }
 }
@@ -722,20 +892,29 @@ $('#buyForm').addEventListener('submit', e=>{
     toast('Disco actualizado');
   }else{
     const qty = Math.max(1, Math.min(200, parseInt($('#bQty').value)||1));
+    const added = [];
     for(let k=0;k<qty;k++){
-      state.items.push({id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'',
-        ...base, status:'stock', sale:null, createdAt:new Date().toISOString()});
+      const it = {id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'',
+        ...base, status:'stock', sale:null, dgInstance:null, dgSync:null, createdAt:new Date().toISOString()};
+      state.items.push(it); added.push(it);
     }
     toast(qty>1 ? `${qty} copias agregadas al inventario` : 'Agregado al inventario');
     $('#results').innerHTML=''; $('#localMatch').innerHTML=''; $('#barcodeInput').value='';
+    save(); $('#buyDlg').close(); renderAll();
+    syncItems(added);
+    return;
   }
   save(); $('#buyDlg').close(); renderAll();
 });
 $('#bDelete').addEventListener('click', async ()=>{
   const it = state.items.find(i=>i.id===editingId); if(!it) return;
   $('#buyDlg').close();
-  if(await confirmBox('Eliminar disco', `Se borra “${it.artist} – ${it.album}” del inventario${it.sale?' junto con su venta':''}. No se puede deshacer.`)){
-    state.items = state.items.filter(i=>i.id!==it.id); save(); renderAll(); toast('Eliminado');
+  const inColl = it.dgInstance && syncOn();
+  if(await confirmBox('Eliminar disco', `Se borra “${it.artist} – ${it.album}” del inventario${it.sale?' junto con su venta':''}${inColl?' y de tu colección de Discogs':''}. No se puede deshacer.`)){
+    let warn = '';
+    if(inColl){ try{ await dgRemove(it); }catch(e){ warn = ' Quítalo a mano de tu colección en Discogs.'; } }
+    state.items = state.items.filter(i=>i.id!==it.id); save(); renderAll();
+    toast('Eliminado.' + warn, !!warn);
   }
 });
 
@@ -784,18 +963,27 @@ $('#sellForm').addEventListener('submit', e=>{
   save(); $('#sellDlg').close(); renderAll();
   $('#localMatch').innerHTML=''; $('#results').innerHTML=''; $('#barcodeInput').value='';
   toast(`Vendido: ${money(it.sale.price)}`);
+  if(syncOn() && it.dgInstance) setTimeout(()=>syncItems([it]), 1200);
 });
 $('#sUndo').addEventListener('click', async ()=>{
   const it = state.items.find(i=>i.id===sellingId); if(!it) return;
   $('#sellDlg').close();
   if(await confirmBox('Anular venta', `“${it.artist} – ${it.album}” regresa al stock.`)){
     it.sale = null; it.status = 'stock'; save(); renderAll(); toast('Venta anulada, regresa a stock');
+    if(syncOn() && it.releaseId) setTimeout(()=>syncItems([it]), 1200);
   }
 });
 
 /* ---------- Tarjetas de disco ---------- */
+function dgChip(i){
+  if(!i.releaseId || !state.settings.sync) return '';
+  if(i.dgSync && i.dgSync.endsWith('-failed')) return '<span class="chip dg-warn">Discogs ⚠</span>';
+  if(i.dgInstance) return '<span class="chip dg">En colección ✓</span>';
+  return '';
+}
 function itemCard(i, compact){
   const c = catOf(i.category);
+  const failed = state.settings.sync && i.dgSync && i.dgSync.endsWith('-failed') && pendingOp(i);
   return `<div class="item ${i.status==='sold'?'sold':''}">
     ${thumbHtml(i.thumb)}
     <div class="grow">
@@ -804,13 +992,15 @@ function itemCard(i, compact){
         <div class="price">${i.status==='sold'? money(i.sale.price) : (i.price?money(i.price):'—')}</div>
       </div>
       <div class="it-meta">
-        <span class="chip ${c.cls}">${esc(c.name)}</span>${i.status==='sold'?`<span class="chip sold">Vendido ${esc(fmtDate(i.sale.date))}</span>`:''}${i.obi?'<span class="chip">obi</span>':''}<br>
+        <span class="chip ${c.cls}">${esc(c.name)}</span>${i.status==='sold'?`<span class="chip sold">Vendido ${esc(fmtDate(i.sale.date))}</span>`:''}${i.obi?'<span class="chip">obi</span>':''}${dgChip(i)}<br>
         ${[i.format, i.year, i.country, `${i.media}/${i.sleeve}`].filter(Boolean).map(esc).join(' · ')}<br>
         ${[i.catno, i.lot?('Lote: '+i.lot):'', 'Costo '+money(i.cost)].filter(Boolean).map(esc).join(' · ')}
       </div>
       <div class="it-actions">
         ${i.status==='stock' ? `<button class="btn accent sm" data-sell="${i.id}">Vender</button>` : `<button class="btn sm" data-sell="${i.id}">Ver venta</button>`}
         ${compact?'':`<button class="btn sm" data-edit="${i.id}">Editar</button>`}
+        ${failed?`<button class="btn sm danger" data-resync="${i.id}">Reintentar Discogs</button>`:''}
+        ${!compact && i.releaseId?`<a class="btn sm ghost" href="https://www.discogs.com/release/${i.releaseId}" target="_blank" rel="noopener">Discogs</a>`:''}
       </div>
     </div>
   </div>`;
@@ -818,6 +1008,11 @@ function itemCard(i, compact){
 function bindItemButtons(root){
   root.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>openSell(b.dataset.sell));
   root.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ const it=state.items.find(i=>i.id===b.dataset.edit); openBuy(null,it); });
+  root.querySelectorAll('[data-resync]').forEach(b=>b.onclick=()=>{
+    const it=state.items.find(i=>i.id===b.dataset.resync); if(!it) return;
+    if(!syncOn()){ toast('Activa la colección de Discogs en Ajustes', true); return; }
+    b.disabled = true; b.innerHTML = '<span class="spinner"></span>'; syncItems([it]);
+  });
 }
 
 /* ---------- Inventario ---------- */
@@ -912,13 +1107,66 @@ function renderSettings(){
   $('#setCurrency').value = state.settings.currency||'MXN';
   $('#setDefPrice').value = state.settings.defPrice ?? '';
   $('#lastBackup').textContent = state.lastBackup ? `Último respaldo: ${new Date(state.lastBackup).toLocaleString('es-MX')}` : 'Aún no descargas ningún respaldo.';
+  $('#appVersion').textContent = APP_VERSION;
+  renderSync();
 }
+function renderSync(){
+  const S = state.settings;
+  $('#setSync').checked = !!S.sync;
+  $('#syncBox').hidden = !S.sync;
+  $('#syncUser').innerHTML = S.username ? `Cuenta conectada: <strong>${esc(S.username)}</strong>` : '<span class="muted">Cuenta sin identificar todavía.</span>';
+  const folders = (S.folders && S.folders.length) ? S.folders : [{id:S.folderId||1, name:S.folderName||'Uncategorized'}];
+  $('#setFolder').innerHTML = folders.filter(f=>f.id!==0).map(f=>`<option value="${f.id}">${esc(f.name)}${f.count!=null?` (${f.count})`:''}</option>`).join('');
+  $('#setFolder').value = String(S.folderId||1);
+  const pend = state.items.filter(pendingOp).length;
+  $('#syncPendingBtn').textContent = pend ? `Sincronizar pendientes (${pend})` : 'Sincronizar pendientes';
+  $('#syncPendingBtn').disabled = !pend;
+}
+async function connectCollection(){
+  $('#syncResult').innerHTML = '<span class="spinner"></span> Conectando con tu cuenta…';
+  try{
+    const me = await dg('/oauth/identity');
+    if(!me || !me.username) throw new Error('No pude identificar la cuenta del token.');
+    state.settings.username = me.username;
+    const fd = await dg(`/users/${encodeURIComponent(me.username)}/collection/folders`);
+    state.settings.folders = (fd && fd.folders || []).map(f=>({id:f.id, name:f.name, count:f.count}));
+    if(!state.settings.folders.some(f=>f.id===state.settings.folderId)) state.settings.folderId = 1;
+    const cur = state.settings.folders.find(f=>f.id===state.settings.folderId);
+    state.settings.folderName = cur ? cur.name : 'Uncategorized';
+    save(); renderSync();
+    $('#syncResult').innerHTML = '<span style="color:var(--ok)">✓ Colección conectada.</span>';
+  }catch(e){
+    $('#syncResult').innerHTML = `<span style="color:#b3170a">${esc(e.message)}</span>`;
+  }
+}
+$('#setSync').addEventListener('change', async e=>{
+  if(e.target.checked && !state.settings.token){ e.target.checked=false; toast('Primero guarda tu token de Discogs', true); return; }
+  state.settings.sync = e.target.checked; save(); renderSync();
+  if(state.settings.sync) await connectCollection();
+});
+$('#loadFolders').addEventListener('click', connectCollection);
+$('#setFolder').addEventListener('change', e=>{
+  state.settings.folderId = parseInt(e.target.value) || 1;
+  const f = (state.settings.folders||[]).find(x=>x.id===state.settings.folderId);
+  state.settings.folderName = f ? f.name : 'Uncategorized';
+  save(); toast(`Los discos nuevos irán a “${state.settings.folderName}”`);
+});
+$('#syncPendingBtn').addEventListener('click', async ()=>{
+  if(!syncOn()){ await connectCollection(); if(!syncOn()) return; }
+  const list = state.items.filter(pendingOp);
+  const b = $('#syncPendingBtn'); b.disabled = true;
+  $('#syncResult').innerHTML = `<span class="spinner"></span> Sincronizando ${list.length} discos (≈${Math.ceil(list.length*1.2)} s)…`;
+  const r = await syncItems(list, true);
+  $('#syncResult').innerHTML = r.fail ? `<span style="color:#b3170a">${r.ok} listos, ${r.fail} con error: ${esc(r.lastErr)}</span>` : `<span style="color:var(--ok)">✓ ${r.ok} discos sincronizados.</span>`;
+  renderSync();
+});
 $('#showToken').onclick = ()=>{ const t=$('#setToken'); t.type = t.type==='password'?'text':'password'; };
 $('#saveSettings').onclick = ()=>{
   state.settings.token = $('#setToken').value.trim();
   state.settings.currency = $('#setCurrency').value;
   state.settings.defPrice = num($('#setDefPrice').value);
   save(); renderHeader(); toast('Ajustes guardados');
+  if(state.settings.sync) connectCollection();
 };
 $('#testToken').onclick = async ()=>{
   state.settings.token = $('#setToken').value.trim(); save(); renderHeader();
