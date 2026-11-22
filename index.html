@@ -128,6 +128,7 @@
   .reader .frame::after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:var(--orange);opacity:.85;animation:scanline 1.6s ease-in-out infinite}
   .reader .status{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:var(--cream);font-size:13px;font-weight:700;text-shadow:0 1px 3px #000;padding:0 10px}
   .live-band{display:flex;align-items:center;gap:10px;background:var(--blue);color:var(--cream);border:1.5px solid var(--ink);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;box-shadow:3px 3px 0 var(--ink)}
+  .live-band .btn{color:var(--ink)}
   .live-dot{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--orange);display:flex;align-items:center;gap:6px}
   .live-dot::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--orange);animation:blink 1.2s infinite}
   @keyframes blink{50%{opacity:.25}}
@@ -254,6 +255,7 @@
   <section class="view active" id="v-scan">
     <h2>Agregar discos</h2>
     <div id="tokenNotice"></div>
+    <div id="lotBox"></div>
 
     <div class="card">
       <div id="reader"></div>
@@ -465,6 +467,7 @@
         <div><label class="f">Lote</label><input type="text" id="bLot" list="lotList" placeholder="ej. Colección 72"></div>
         <div><label class="f">Fecha de compra</label><input type="date" id="bDate"></div>
       </div>
+      <div class="filters ev-pills" id="bLotPills"></div>
       <label class="f">Proveedor / origen</label><input type="text" id="bSupplier" list="supList" placeholder="ej. ZenMarket, tianguis, particular">
       <label class="f">Notas</label><textarea id="bNotes" placeholder="Rayones, faltantes, edición especial…"></textarea>
     </div>
@@ -531,6 +534,31 @@
   </form>
 </dialog>
 
+<!-- Configurar modo lote -->
+<dialog id="lotDlg">
+  <form id="lotForm" method="dialog" autocomplete="off">
+    <div class="dlg-head"><h4>Capturar un lote</h4><button type="button" class="x" data-close>×</button></div>
+    <div class="dlg-body">
+      <p class="small muted mt0">Estos datos se aplican a cada disco que escanees. Después puedes editar cualquiera.</p>
+      <label class="f">Lote</label><input type="text" id="lmLot" list="lotList" required placeholder="ej. Colección 72">
+      <div class="filters ev-pills" id="lmLotPills"></div>
+      <label class="f">Proveedor / origen</label><input type="text" id="lmSupplier" list="supList">
+      <div class="grid2">
+        <div><label class="f">Costo por disco</label><input type="number" id="lmCost" min="0" step="any" inputmode="decimal"></div>
+        <div><label class="f">Precio de venta</label><input type="number" id="lmPrice" min="0" step="any" inputmode="decimal"></div>
+      </div>
+      <div class="small muted" style="margin-top:4px">Si pagaste $3,600 por 72 discos, el costo por disco es $50.</div>
+      <label class="f">Categoría</label><select id="lmCat"></select>
+      <div class="grid2">
+        <div><label class="f">Estado disco</label><select id="lmMedia"></select></div>
+        <div><label class="f">Estado portada</label><select id="lmSleeve"></select></div>
+      </div>
+      <label class="check"><input type="checkbox" id="lmReview"> Revisar cada disco antes de agregarlo</label>
+    </div>
+    <div class="dlg-foot"><span class="grow"></span><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Empezar</button></div>
+  </form>
+</dialog>
+
 <!-- Resumen de pop-up -->
 <dialog id="sumDlg">
   <div class="dlg-head"><h4 id="sumTitle">Resumen</h4><button type="button" class="x" data-close>×</button></div>
@@ -569,7 +597,7 @@ const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-const APP_VERSION = 'v4 · 22 nov 2026';
+const APP_VERSION = 'v5 · 22 nov 2026';
 function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null, cloud:{url:'', key:'', lastSync:null, sheetUrl:'', deleted:[]}}; }
 function load(){
   try{
@@ -860,6 +888,7 @@ function show(v){
   $$('#nav button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
   if(v!=='v-scan') stopCam();
   if(v==='v-pop') renderPop();
+  if(v==='v-scan') renderLotBox();
   if(v==='v-inv') renderInv();
   if(v==='v-sales') renderSales();
   if(v==='v-stats') renderStats();
@@ -1028,7 +1057,7 @@ function registerCam(key, ctx){
   });
 }
 registerCam('scan', {reader:$('#reader'), btn:$('#camBtn'), photo:$('#photoInput'), msg:$('#camMsg'), label:'Escanear con cámara',
-  onCode:(code)=>{ $('#barcodeInput').value = code; lookup(code); }});
+  onCode:(code, source)=>{ lastAddSource = source; $('#barcodeInput').value = code; lookup(code); }});
 
 function revealResults(){
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // oculta el teclado
@@ -1039,7 +1068,7 @@ $('#barcodeForm').addEventListener('submit', e=>{
   e.preventDefault();
   const c = $('#barcodeInput').value.trim();
   if(!c){ toast('Escribe o escanea un código'); $('#barcodeInput').focus(); return; }
-  lookup(c);
+  lastAddSource = 'typed'; lookup(c);
 });
 $('#textForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -1053,14 +1082,14 @@ $('#textForm').addEventListener('submit', async e=>{
 });
 $('#manualBtn').addEventListener('click', ()=> openBuy({artist:$('#qArtist').value.trim(), album:$('#qTitle').value.trim(), catno:$('#qCatno').value.trim(), barcode:digits($('#barcodeInput').value)}));
 
-let lastResults = [];
+let lastResults = [], lastAddSource = null;
 async function lookup(code){
   const c = digits(code);
   if(c.length < 6){ $('#results').innerHTML = `<div class="notice">“${esc(code)}” no parece un código de barras completo. Suelen ser 12 o 13 números.</div>`; revealResults(); return; }
   // 1) ¿Ya está en tu inventario?
   const vars = barcodeVariants(c);
   const mine = state.items.filter(i=>i.status==='stock' && vars.includes(digits(i.barcode)));
-  $('#localMatch').innerHTML = mine.length ? `
+  $('#localMatch').innerHTML = (mine.length && !lotActive()) ? `
     <div class="match-box">
       <strong>Ya tienes ${mine.length} en stock</strong>
       <div class="list" style="margin-top:8px">${mine.map(i=>itemCard(i,true)).join('')}</div>
@@ -1075,6 +1104,7 @@ async function lookup(code){
 }
 function renderResults(list, code){
   lastResults = list;
+  if(lotActive() && code && list.length===1){ quickAdd({...list[0]}, code); return; }   // en modo revisión abre el formulario
   if(!list.length){
     $('#results').innerHTML = `<div class="empty">No encontré ese disco en Discogs.<br><br>
       <button class="btn" id="noResManual">Agregar manual${code?' con este código':''}</button></div>`;
@@ -1090,7 +1120,7 @@ function renderResults(list, code){
           <div class="it-title">${esc(r.album)}</div>
           <div class="it-meta">${[r.year,r.country,r.formatRaw].filter(Boolean).map(esc).join(' · ')}<br>${[r.label,r.catno].filter(Boolean).map(esc).join(' · ')}</div>
           <div class="it-actions">
-            <button class="btn primary sm" data-buy="${ix}">+ Agregar al inventario</button>
+            <button class="btn primary sm" data-buy="${ix}">+ ${lotActive()?'Agregar al lote':'Agregar al inventario'}</button>
             <a class="btn sm" href="https://www.discogs.com/release/${r.releaseId}" target="_blank" rel="noopener">Ver en Discogs</a>
           </div>
         </div>
@@ -1098,8 +1128,115 @@ function renderResults(list, code){
   $$('#results [data-buy]').forEach(b=>b.onclick=()=>{
     const r = {...lastResults[+b.dataset.buy]};
     if(code) r.barcode = code;
-    openBuy(r);
+    if(lotActive()) quickAdd(r, code); else openBuy(r);
   });
+}
+
+/* ---------- Lotes ---------- */
+const autoCat = country => country==='Japan' ? 'jp' : (['Mexico','Argentina','Chile','Colombia','Spain','Peru','Uruguay','Venezuela'].includes(country) ? 'latam' : 'alt');
+const lotActive = () => !!(state.lotMode && state.lotMode.active);
+function recentLots(n=4){
+  const seen = new Map();
+  [...state.items].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).forEach(i=>{ if(i.lot && !seen.has(i.lot)) seen.set(i.lot, i.supplier||''); });
+  return [...seen].slice(0, n);       // [[lote, proveedor], …]
+}
+function lotPills(box, input, supInput){
+  const lots = recentLots();
+  const draw = () => {
+    box.innerHTML = lots.map(([l])=>`<button type="button" class="pill ${input.value.trim()===l?'on':''}" data-l="${esc(l)}">${esc(l)}</button>`).join('');
+    box.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{
+      input.value = b.dataset.l;
+      const sup = (lots.find(x=>x[0]===b.dataset.l)||[])[1];
+      if(supInput && sup) supInput.value = sup;
+      draw();
+    });
+  };
+  input.oninput = draw; draw();
+}
+function renderLotBox(){
+  const L = state.lotMode;
+  if(!lotActive()){
+    $('#lotBox').innerHTML = `<div class="card row" style="gap:12px">
+      <div class="grow"><strong>¿Te llegó un lote?</strong><div class="small muted">Define lote, costo y precio una vez y luego solo escanea.</div></div>
+      <button class="btn ink" type="button" id="lotStart">Modo lote</button></div>`;
+    $('#lotStart').onclick = openLotDlg;
+    return;
+  }
+  const added = (L.added||[]).map(id=>state.items.find(i=>i.id===id)).filter(Boolean);
+  $('#lotBox').innerHTML = `<div class="live-band" style="flex-wrap:wrap">
+      <div class="grow"><div class="live-dot">MODO LOTE</div><div class="live-name">${esc(L.lot)}</div>
+        <div class="small" style="margin-top:4px;opacity:.9">Costo ${money(L.cost)} · Precio ${money(L.price)} · ${esc(L.category==='auto'?'Categoría automática':catOf(L.category).name)} · ${esc(L.media)}/${esc(L.sleeve)}${L.review?' · revisas cada disco':''}</div></div>
+      <div style="text-align:right"><div style="font-size:30px;font-weight:900;line-height:1">${L.count||0}</div><div class="small">agregados</div></div>
+      <div class="row" style="width:100%;margin-top:8px"><button class="btn sm" type="button" id="lotEdit">Cambiar datos</button><span class="grow"></span><button class="btn sm accent" type="button" id="lotEnd">Terminar lote</button></div>
+    </div>
+    ${added.length?`<div class="list" style="margin-bottom:12px">${added.slice(0,3).map((i,ix)=>`
+      <div class="item" style="padding:8px">${thumbHtml(i.thumb)}<div class="grow"><div class="it-artist">${esc(i.artist)}</div><div class="it-title">${esc(i.album)}</div>
+      <div class="it-meta">${esc(catOf(i.category).name)} · ${money(i.price)}</div></div>
+      <div class="row" style="flex-direction:column;gap:6px">${ix===0?`<button class="btn sm danger" type="button" id="lotUndo">Deshacer</button>`:''}<button class="btn sm" type="button" data-edit="${i.id}">Editar</button></div></div>`).join('')}</div>`:''}`;
+  $('#lotEdit').onclick = openLotDlg;
+  $('#lotEnd').onclick = ()=>{ const n = L.count||0; L.active = false; save(); renderLotBox(); stopCam(); toast(`Lote “${L.lot}” terminado · ${n} ${n===1?'disco':'discos'}`); };
+  const u = $('#lotUndo'); if(u) u.onclick = undoLastLot;
+  bindItemButtons($('#lotBox'));
+}
+function openLotDlg(){
+  const L = state.lotMode || {}, recent = recentLots(1)[0];
+  $('#lmLot').value = L.lot || (recent ? recent[0] : '');
+  $('#lmSupplier').value = L.supplier || (recent ? recent[1] : '');
+  $('#lmCost').value = L.cost ?? ''; $('#lmPrice').value = L.price ?? (state.settings.defPrice || '');
+  fillSelect($('#lmCat'), [{v:'auto',t:'Automática (según país del disco)'}, ...CATS.map(c=>({v:c.id,t:c.name}))], L.category || 'auto');
+  fillSelect($('#lmMedia'), CONDS.map(c=>({v:c,t:c})), L.media || 'VG+');
+  fillSelect($('#lmSleeve'), CONDS.map(c=>({v:c,t:c})), L.sleeve || 'VG+');
+  $('#lmReview').checked = !!L.review;
+  lotPills($('#lmLotPills'), $('#lmLot'), $('#lmSupplier'));
+  refreshLists();
+  $('#lotDlg').showModal();
+}
+$('#lotForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const was = lotActive() ? state.lotMode : null;
+  const lot = $('#lmLot').value.trim();
+  if(!lot){ toast('Ponle nombre al lote', true); return; }
+  state.lotMode = {active:true, lot, supplier:$('#lmSupplier').value.trim(), cost:num($('#lmCost').value), price:num($('#lmPrice').value),
+    category:$('#lmCat').value, media:$('#lmMedia').value, sleeve:$('#lmSleeve').value, review:$('#lmReview').checked,
+    count: was && was.lot===lot ? was.count||0 : 0, added: was && was.lot===lot ? was.added||[] : []};
+  saveLocal(); $('#lotDlg').close(); renderLotBox();
+  if(!was){ toast(`Lote “${lot}” listo · escanea el primer disco`); startCam(CAMS.scan); }
+});
+function lotItem(rel){
+  const L = state.lotMode;
+  return {id:uid(), releaseId:rel.releaseId||null, label:rel.label||'', thumb:rel.thumb||'', styles:rel.styles||[],
+    artist:rel.artist||'', album:rel.album||'', year:rel.year||'', format:rel.format||'CD', country:rel.country||'',
+    catno:rel.catno||'', barcode:digits(rel.barcode||''), category: L.category==='auto' ? autoCat(rel.country) : L.category,
+    media:L.media, sleeve:L.sleeve, obi:false, cost:num(L.cost), price:num(L.price), lot:L.lot, supplier:L.supplier,
+    purchasedAt:today(), notes:'', status:'stock', sale:null, dgInstance:null, dgSync:null, createdAt:new Date().toISOString()};
+}
+function lotCounted(items){
+  const L = state.lotMode; if(!L) return;
+  L.count = (L.count||0) + items.length;
+  L.added = [...items.map(i=>i.id).reverse(), ...(L.added||[])].slice(0, 20);
+}
+function nextScan(barcode){
+  if(lastAddSource !== 'camera') return;
+  if(barcode){ ignoreCodes = barcodeVariants(barcode); ignoreUntil = Date.now() + 8000; }   // tiempo para cambiar de disco
+  setTimeout(()=>startCam(CAMS.scan), 300);
+}
+function quickAdd(rel, code){
+  if(code) rel = {...rel, barcode:code};
+  if(state.lotMode.review){ openBuy(rel); return; }
+  const it = lotItem(rel); touch(it); state.items.push(it); lotCounted([it]);
+  $('#results').innerHTML=''; $('#localMatch').innerHTML=''; $('#barcodeInput').value='';
+  save(); renderAll(); renderLotBox();
+  toast(`+1 · ${it.artist} – ${it.album}`);
+  syncItems([it], true).then(r=>{ if(r && r.fail) toast('No se pudo agregar a tu colección de Discogs. Usa “Reintentar” en Inventario.', true); });
+  nextScan(it.barcode);
+}
+async function undoLastLot(){
+  const L = state.lotMode, id = (L.added||[])[0], it = state.items.find(i=>i.id===id); if(!it) return;
+  if(syncOn() && it.releaseId && !it.dgInstance) await sleep(1500);   // espera a que Discogs termine de agregarlo
+  if(it.dgInstance && syncOn()){ try{ await dgRemove(it); }catch(e){ toast('Quítalo a mano de tu colección en Discogs.', true); } }
+  state.items = state.items.filter(i=>i.id!==it.id); markDeleted('Inventario', it.id, it._synced);
+  L.added.shift(); L.count = Math.max(0, (L.count||0) - 1);
+  save(); renderAll(); renderLotBox(); toast(`Quitado: ${it.artist} – ${it.album}`);
 }
 
 /* ---------- Compra / edición ---------- */
@@ -1122,16 +1259,17 @@ function openBuy(rel, item){
   $('#bCountry').value = src.country||'';
   $('#bCatno').value = src.catno||'';
   $('#bBarcode').value = src.barcode||'';
-  fillSelect($('#bCat'), CATS.map(c=>({v:c.id,t:c.name})), src.category || (src.country==='Japan'?'jp':(['Mexico','Argentina','Chile','Colombia','Spain'].includes(src.country)?'latam':'alt')));
-  fillSelect($('#bMedia'), CONDS.map(c=>({v:c,t:c})), src.media||'VG+');
-  fillSelect($('#bSleeve'), CONDS.map(c=>({v:c,t:c})), src.sleeve||'VG+');
+  const lm = !item && lotActive() ? state.lotMode : null, recent = recentLots(1)[0];
+  fillSelect($('#bCat'), CATS.map(c=>({v:c.id,t:c.name})), src.category || (lm && lm.category!=='auto' ? lm.category : autoCat(src.country)));
+  fillSelect($('#bMedia'), CONDS.map(c=>({v:c,t:c})), src.media || (lm ? lm.media : 'VG+'));
+  fillSelect($('#bSleeve'), CONDS.map(c=>({v:c,t:c})), src.sleeve || (lm ? lm.sleeve : 'VG+'));
   $('#bObi').checked = !!src.obi;
-  $('#bCost').value = item ? (item.cost ?? '') : '';
-  $('#bPrice').value = item ? (item.price ?? '') : (state.settings.defPrice || '');
+  $('#bCost').value = item ? (item.cost ?? '') : (lm ? lm.cost : '');
+  $('#bPrice').value = item ? (item.price ?? '') : (lm ? lm.price : (state.settings.defPrice || ''));
   $('#bQty').value = 1;
-  const lastLot = !item && state.items.length ? state.items[state.items.length-1] : null;
-  $('#bLot').value = item ? (item.lot||'') : (lastLot ? lastLot.lot||'' : '');
-  $('#bSupplier').value = item ? (item.supplier||'') : (lastLot ? lastLot.supplier||'' : '');
+  $('#bLot').value = item ? (item.lot||'') : (lm ? lm.lot : (recent ? recent[0] : ''));
+  $('#bSupplier').value = item ? (item.supplier||'') : (lm ? lm.supplier : (recent ? recent[1] : ''));
+  lotPills($('#bLotPills'), $('#bLot'), $('#bSupplier'));
   $('#bDate').value = item ? (item.purchasedAt||today()) : today();
   $('#bNotes').value = item ? (item.notes||'') : '';
   refreshLists();
@@ -1171,7 +1309,9 @@ $('#buyForm').addEventListener('submit', e=>{
     }
     toast(qty>1 ? `${qty} copias agregadas al inventario` : 'Agregado al inventario');
     $('#results').innerHTML=''; $('#localMatch').innerHTML=''; $('#barcodeInput').value='';
+    if(lotActive() && base.lot===state.lotMode.lot) lotCounted(added);
     save(); $('#buyDlg').close(); renderAll();
+    if(lotActive()){ renderLotBox(); nextScan(base.barcode); }
     syncItems(added);
     return;
   }
@@ -1729,7 +1869,7 @@ function renderAll(){
   const v = ($('.view.active')||{}).id;
   if(v==='v-pop') renderPop(); if(v==='v-inv') renderInv(); if(v==='v-sales') renderSales(); if(v==='v-stats') renderStats();
 }
-if(activeEvent()) show('v-pop'); else renderAll();
+if(activeEvent()) show('v-pop'); else { renderAll(); renderLotBox(); }
 if(cloudOn()) setTimeout(cloudSync, 300);
 })();
 </script>
