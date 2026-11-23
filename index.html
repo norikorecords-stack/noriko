@@ -53,6 +53,10 @@
     width:100%;padding:11px 12px;border:1.5px solid var(--ink);border-radius:10px;background:#fff;font-size:16px;font-weight:500}
   input:focus,select:focus,textarea:focus{outline:3px solid rgba(15,4,242,.25);border-color:var(--blue)}
   textarea{min-height:64px;resize:vertical}
+  /* iPhone: el campo de fecha ignora el ancho y se sale de la tarjeta */
+  input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;min-height:46px;text-align:left;background:#fff}
+  input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+  input[type=date]::-webkit-datetime-edit{padding:0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px}
 
@@ -597,7 +601,7 @@ const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-const APP_VERSION = 'v5 · 22 nov 2026';
+const APP_VERSION = 'v5.1 · 22 nov 2026';
 function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null, cloud:{url:'', key:'', lastSync:null, sheetUrl:'', deleted:[]}}; }
 function load(){
   try{
