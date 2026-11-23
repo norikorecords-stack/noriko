@@ -151,6 +151,8 @@
   .top-note{background:var(--orange);color:var(--ink);border:1.5px solid var(--ink);border-radius:10px;padding:10px 12px;font-weight:700;margin:12px 0}
   .past{display:flex;align-items:center;gap:10px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px}
   .ev-pills{margin:6px 0 0}
+  .origin-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+  .origin-row .small{line-height:1.2}
   #popResults{scroll-margin-top:96px}
   .cloud{border:1.5px solid var(--ink);background:#fff;border-radius:99px;font-size:11px;font-weight:700;padding:4px 9px;cursor:pointer;white-space:nowrap;flex:none}
   .cloud.ok{color:var(--ok);border-color:var(--ok)}
@@ -311,6 +313,7 @@
       <button class="pill" data-st="all">Todos</button>
     </div>
     <div class="filters" id="catFilters"></div>
+    <div id="originNotice"></div>
     <div class="summary-line" id="invSummary"></div>
     <div class="list" id="invList"></div>
   </section>
@@ -329,6 +332,7 @@
     <h2>Resumen</h2>
     <div class="kpis" id="kpis"></div>
     <h3>Por categoría</h3><div class="tbl-wrap" id="tblCat"></div>
+    <h3>Por origen del artista</h3><div class="tbl-wrap" id="tblOrigin"></div>
     <h3>Por lote</h3><div class="tbl-wrap" id="tblLot"></div>
     <h3>Por evento</h3><div class="tbl-wrap" id="tblEvent"></div>
     <h3>Por método de pago</h3><div class="tbl-wrap" id="tblPay"></div>
@@ -445,11 +449,14 @@
         <div><label class="f">Artista</label><input type="text" id="bArtist" required></div>
         <div><label class="f">Álbum</label><input type="text" id="bAlbum" required></div>
       </div>
+      <label class="f">Origen del artista</label>
+      <input type="text" id="bOrigin" list="originList" placeholder="ej. Japón, Francia, México">
+      <div class="filters ev-pills" id="bOriginPills"></div>
       <div class="grid3">
         <div><label class="f">Año</label><input type="text" id="bYear" inputmode="numeric"></div>
         <div><label class="f">Formato</label>
           <select id="bFormat"><option>CD</option><option>Vinilo</option><option>Casete</option><option>CD sencillo</option><option>Otro</option></select></div>
-        <div><label class="f">País</label><input type="text" id="bCountry"></div>
+        <div><label class="f">País edición</label><input type="text" id="bCountry"></div>
       </div>
       <div class="grid2">
         <div><label class="f">Catálogo</label><input type="text" id="bCatno"></div>
@@ -563,11 +570,23 @@
   </form>
 </dialog>
 
+<!-- Completar origen de artistas -->
+<dialog id="originDlg">
+  <form id="originForm" method="dialog" autocomplete="off">
+    <div class="dlg-head"><h4>Origen de los artistas</h4><button type="button" class="x" data-close>×</button></div>
+    <div class="dlg-body">
+      <p class="small muted mt0">Escríbelo una vez por artista y se aplica a todos sus discos. Deja vacío el que no sepas.</p>
+      <div id="originRows"></div>
+    </div>
+    <div class="dlg-foot"><span class="grow"></span><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Guardar</button></div>
+  </form>
+</dialog>
+
 <!-- Resumen de pop-up -->
 <dialog id="sumDlg">
   <div class="dlg-head"><h4 id="sumTitle">Resumen</h4><button type="button" class="x" data-close>×</button></div>
   <div class="dlg-body" id="sumBody"></div>
-  <div class="dlg-foot"><button class="btn" id="sumCopy">Copiar resumen</button><span class="grow"></span><button class="btn primary" data-close>Listo</button></div>
+  <div class="dlg-foot"><button class="btn danger" id="sumDelete">Borrar evento</button><button class="btn" id="sumCopy">Copiar</button><span class="grow"></span><button class="btn primary" data-close>Listo</button></div>
 </dialog>
 
 <!-- Diálogo de confirmación -->
@@ -580,6 +599,7 @@
 <datalist id="lotList"></datalist>
 <datalist id="supList"></datalist>
 <datalist id="eventList"></datalist>
+<datalist id="originList"></datalist>
 
 <div class="toast" id="toast"></div>
 
@@ -601,7 +621,7 @@ const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-const APP_VERSION = 'v5.1 · 22 nov 2026';
+const APP_VERSION = 'v6 · 23 nov 2026';
 function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null, cloud:{url:'', key:'', lastSync:null, sheetUrl:'', deleted:[]}}; }
 function load(){
   try{
@@ -774,7 +794,7 @@ const str = v => v==null ? '' : String(v);
 
 function toRow(i){
   const s = i.sale || {};
-  return {ID:i.id, Artista:i.artist, 'Álbum':i.album, 'Año':i.year, Formato:i.format, 'País':i.country, Sello:i.label||'',
+  return {ID:i.id, Artista:i.artist, 'Origen artista':i.artistOrigin||'', 'Álbum':i.album, 'Año':i.year, Formato:i.format, 'País':i.country, Sello:i.label||'',
     'Catálogo':i.catno, 'Código':i.barcode, 'Categoría':catOf(i.category).name, 'Géneros':(i.styles||[]).join(', '),
     Disco:i.media, Portada:i.sleeve, Obi:i.obi?'Sí':'No', Costo:num(i.cost), Precio:num(i.price), Lote:i.lot, Proveedor:i.supplier,
     'Fecha compra':i.purchasedAt, Estado:i.status==='sold'?'Vendido':'En stock',
@@ -788,7 +808,7 @@ function fromRow(r){
   const cat = CATS.find(x=>x.name.toLowerCase()===c || x.id===c) || CATS.find(x=>c && c.startsWith(x.name.split(' ')[0].toLowerCase())) || CATS[0];
   const sold = /vendid/i.test(str(r.Estado));
   const n = v => (v===''||v==null) ? null : Number(v);
-  return {id:str(r.ID), artist:str(r.Artista), album:str(r['Álbum']), year:str(r['Año']), format:str(r.Formato)||'CD',
+  const o = {id:str(r.ID), artist:str(r.Artista), album:str(r['Álbum']), year:str(r['Año']), format:str(r.Formato)||'CD',
     country:str(r['País']), label:str(r.Sello), catno:str(r['Catálogo']), barcode:digits(r['Código']), category:cat.id,
     styles:str(r['Géneros']).split(',').map(x=>x.trim()).filter(Boolean), media:str(r.Disco)||'VG+', sleeve:str(r.Portada)||'VG+',
     obi:/^s[ií]/i.test(str(r.Obi)), cost:num(r.Costo), price:num(r.Precio), lot:str(r.Lote), supplier:str(r.Proveedor),
@@ -799,6 +819,8 @@ function fromRow(r){
     releaseId:n(r['Discogs release']), dgInstance:n(r['Discogs instancia']), dgFolder:n(r['Discogs carpeta']),
     dgUser:str(r['Discogs usuario']), dgSync:str(r['Discogs estado'])||null, thumb:str(r.Imagen),
     createdAt:str(r.Creado), updatedAt:str(r.Actualizado)};
+  if('Origen artista' in r) o.artistOrigin = str(r['Origen artista']);   // si la hoja aún no tiene la columna, conserva el dato local
+  return o;
 }
 const evToRow = e => ({ID:e.id, Nombre:e.name, Fecha:e.date, Abierto:e.openedAt||'', Cerrado:e.closedAt||'', Actualizado:e.updatedAt||''});
 const evFromRow = r => ({id:str(r.ID), name:str(r.Nombre), date:str(r.Fecha)||today(), openedAt:str(r.Abierto), closedAt:str(r.Cerrado)||null, updatedAt:str(r.Actualizado)});
@@ -915,6 +937,7 @@ function refreshLists(){
   $('#supList').innerHTML = uniq(i=>i.supplier).map(x=>`<option value="${esc(x)}">`).join('');
   const evNames = [...new Set([...state.events.map(e=>e.name), ...state.items.map(i=>i.sale&&i.sale.event)].filter(Boolean))];
   $('#eventList').innerHTML = evNames.map(x=>`<option value="${esc(x)}">`).join('');
+  $('#originList').innerHTML = uniq(i=>i.artistOrigin).map(x=>`<option value="${esc(x)}">`).join('');
 }
 
 /* ---------- Escáner ---------- */
@@ -969,6 +992,7 @@ async function startCam(ctx){
   video.muted = true; video.setAttribute('playsinline','');
   try{
     const detP = getDetector();          // empieza a cargar el lector en paralelo
+    detP.catch(()=>{});                  // si falla, el error se muestra abajo al esperarlo
     stream = await navigator.mediaDevices.getUserMedia({audio:false,
       video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
     if(!scanning || cam!==ctx){ stopTracks(); return; }
@@ -1136,6 +1160,56 @@ function renderResults(list, code){
   });
 }
 
+/* ---------- Origen del artista ---------- */
+// El país de la edición (Discogs) y el origen del artista son datos distintos: un disco de Air puede ser edición japonesa.
+const normArtist = a => String(a||'').trim().toLowerCase();
+function knownOrigin(artist){
+  const n = normArtist(artist); if(!n) return '';
+  const hit = [...state.items].sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')).find(i=>normArtist(i.artist)===n && i.artistOrigin);
+  return hit ? hit.artistOrigin : '';
+}
+function topOrigins(n=5){
+  const m = new Map(); state.items.forEach(i=>{ if(i.artistOrigin) m.set(i.artistOrigin, (m.get(i.artistOrigin)||0)+1); });
+  const used = [...m].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  return [...new Set([...used, 'Japón', 'EUA', 'Reino Unido', 'México'])].slice(0, n);
+}
+// Guarda el origen en todos los discos de ese artista que todavía no lo tienen (o lo tenían distinto).
+function applyOrigin(artist, origin, onlyEmpty){
+  const n = normArtist(artist), changed = [];
+  if(!n) return changed;
+  state.items.forEach(i=>{ if(normArtist(i.artist)===n && (i.artistOrigin||'')!==origin && (!onlyEmpty || !i.artistOrigin)){ i.artistOrigin = origin; touch(i); changed.push(i); } });
+  return changed;
+}
+function originPills(){
+  const box = $('#bOriginPills'), input = $('#bOrigin'), list = topOrigins();
+  const draw = () => {
+    box.innerHTML = list.map(o=>`<button type="button" class="pill ${input.value.trim()===o?'on':''}" data-o="${esc(o)}">${esc(o)}</button>`).join('');
+    box.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{ input.value = b.dataset.o; draw(); });
+  };
+  input.oninput = draw; draw();
+  $('#bArtist').onchange = () => { if(!input.value.trim()){ const k = knownOrigin($('#bArtist').value); if(k){ input.value = k; draw(); } } };
+}
+const artistsMissingOrigin = () => {
+  const m = new Map();
+  state.items.forEach(i=>{ const n = normArtist(i.artist); if(!n) return;
+    const g = m.get(n) || {name:i.artist, n:0, origin:''}; g.n++; if(i.artistOrigin) g.origin = i.artistOrigin; m.set(n, g); });
+  return [...m.values()].filter(g=>!g.origin).sort((a,b)=>b.n-a.n || a.name.localeCompare(b.name,'es'));
+};
+function openOriginDlg(){
+  const list = artistsMissingOrigin();
+  if(!list.length){ toast('Todos tus artistas ya tienen origen'); return; }
+  $('#originRows').innerHTML = list.map((g,ix)=>`<div class="origin-row"><div class="small"><strong>${esc(g.name)}</strong><br><span class="muted">${g.n} ${g.n===1?'disco':'discos'}</span></div>
+    <input type="text" list="originList" data-ix="${ix}" placeholder="Origen"></div>`).join('');
+  $('#originForm').onsubmit = e => {
+    e.preventDefault();
+    let n = 0;
+    $$('#originRows input').forEach(inp=>{ const v = inp.value.trim(); if(v) n += applyOrigin(list[+inp.dataset.ix].name, v, true).length; });
+    save(); $('#originDlg').close(); renderAll(); toast(n ? `Origen guardado en ${n} ${n===1?'disco':'discos'}` : 'Sin cambios');
+  };
+  refreshLists();
+  $('#originDlg').showModal();
+}
+
 /* ---------- Lotes ---------- */
 const autoCat = country => country==='Japan' ? 'jp' : (['Mexico','Argentina','Chile','Colombia','Spain','Peru','Uruguay','Venezuela'].includes(country) ? 'latam' : 'alt');
 const lotActive = () => !!(state.lotMode && state.lotMode.active);
@@ -1209,7 +1283,7 @@ $('#lotForm').addEventListener('submit', e=>{
 function lotItem(rel){
   const L = state.lotMode;
   return {id:uid(), releaseId:rel.releaseId||null, label:rel.label||'', thumb:rel.thumb||'', styles:rel.styles||[],
-    artist:rel.artist||'', album:rel.album||'', year:rel.year||'', format:rel.format||'CD', country:rel.country||'',
+    artist:rel.artist||'', artistOrigin:knownOrigin(rel.artist), album:rel.album||'', year:rel.year||'', format:rel.format||'CD', country:rel.country||'',
     catno:rel.catno||'', barcode:digits(rel.barcode||''), category: L.category==='auto' ? autoCat(rel.country) : L.category,
     media:L.media, sleeve:L.sleeve, obi:false, cost:num(L.cost), price:num(L.price), lot:L.lot, supplier:L.supplier,
     purchasedAt:today(), notes:'', status:'stock', sale:null, dgInstance:null, dgSync:null, createdAt:new Date().toISOString()};
@@ -1257,6 +1331,8 @@ function openBuy(rel, item){
   $('#bRelInfo').innerHTML = src.releaseId ? `Discogs #${src.releaseId}${src.label?' · '+esc(src.label):''}` : 'Sin ficha de Discogs';
   $('#bMarket').innerHTML = '';
   $('#bArtist').value = src.artist||'';
+  $('#bOrigin').value = src.artistOrigin || (item ? '' : knownOrigin(src.artist));
+  originPills();
   $('#bAlbum').value = src.album||'';
   $('#bYear').value = src.year||'';
   $('#bFormat').value = src.format||'CD';
@@ -1290,7 +1366,7 @@ function openBuy(rel, item){
 $('#buyForm').addEventListener('submit', e=>{
   e.preventDefault();
   const base = {
-    artist: $('#bArtist').value.trim(), album: $('#bAlbum').value.trim(),
+    artist: $('#bArtist').value.trim(), artistOrigin: $('#bOrigin').value.trim(), album: $('#bAlbum').value.trim(),
     year: $('#bYear').value.trim(), format: $('#bFormat').value, country: $('#bCountry').value.trim(),
     catno: $('#bCatno').value.trim(), barcode: digits($('#bBarcode').value),
     category: $('#bCat').value, media: $('#bMedia').value, sleeve: $('#bSleeve').value, obi: $('#bObi').checked,
@@ -1299,6 +1375,7 @@ $('#buyForm').addEventListener('submit', e=>{
     purchasedAt: $('#bDate').value || today(), notes: $('#bNotes').value.trim(),
   };
   if(!base.artist || !base.album){ toast('Falta artista o álbum', true); return; }
+  if(base.artistOrigin) applyOrigin(base.artist, base.artistOrigin, true);   // lo recuerda para sus otros discos
   if(editingId){
     const it = state.items.find(i=>i.id===editingId);
     Object.assign(it, base); touch(it);
@@ -1419,7 +1496,7 @@ function itemCard(i, compact){
       </div>
       <div class="it-meta">
         <span class="chip ${c.cls}">${esc(c.name)}</span>${i.status==='sold'?`<span class="chip sold">Vendido ${esc(fmtDate(i.sale.date))}</span>`:''}${i.obi?'<span class="chip">obi</span>':''}${dgChip(i)}<br>
-        ${[i.format, i.year, i.country, `${i.media}/${i.sleeve}`].filter(Boolean).map(esc).join(' · ')}<br>
+        ${[i.artistOrigin?`Artista de ${i.artistOrigin}`:'', i.format, i.year, i.country?`ed. ${i.country}`:'', `${i.media}/${i.sleeve}`].filter(Boolean).map(esc).join(' · ')}<br>
         ${[i.catno, i.lot?('Lote: '+i.lot):'', 'Costo '+money(i.cost)].filter(Boolean).map(esc).join(' · ')}
       </div>
       <div class="it-actions">
@@ -1449,7 +1526,10 @@ function renderInv(){
   $$('#statusFilters .pill').forEach(b=>b.classList.toggle('on', b.dataset.st===invStatus));
   const q = $('#invSearch').value.trim().toLowerCase();
   let list = state.items.filter(i=>(invStatus==='all'||i.status===invStatus) && (invCat==='all'||i.category===invCat));
-  if(q) list = list.filter(i=>[i.artist,i.album,i.catno,i.lot,i.barcode,i.supplier,i.year,i.notes].join(' ').toLowerCase().includes(q));
+  if(q) list = list.filter(i=>[i.artist,i.artistOrigin,i.album,i.catno,i.lot,i.barcode,i.supplier,i.year,i.notes].join(' ').toLowerCase().includes(q));
+  const miss = artistsMissingOrigin().length;
+  $('#originNotice').innerHTML = miss ? `<div class="notice row" style="gap:10px"><span class="grow">${miss} ${miss===1?'artista':'artistas'} sin origen.</span><button class="btn sm ink" type="button" id="originFix">Completar</button></div>` : '';
+  if(miss) $('#originFix').onclick = openOriginDlg;
   list.sort((a,b)=> invStatus==='sold' ? (b.sale.date||'').localeCompare(a.sale.date||'') : a.artist.localeCompare(b.artist,'es') || a.album.localeCompare(b.album,'es'));
   const cost = list.reduce((s,i)=>s+num(i.cost),0), val = list.reduce((s,i)=>s+(i.status==='sold'?num(i.sale.price):num(i.price)),0);
   $('#invSummary').textContent = list.length ? `${list.length} discos · costo ${money(cost)} · ${invStatus==='sold'?'vendidos en':'precio de lista'} ${money(val)}` : '';
@@ -1515,6 +1595,11 @@ function renderStats(){
   $('#tblCat').innerHTML = table(['Categoría','Stock','Vendidos','Ingreso','Utilidad'],
     CATS.map(c=>{ const a=I.filter(i=>i.category===c.id); if(!a.length) return null;
       const s=a.filter(i=>i.status==='sold'); return [`<span class="chip ${c.cls}">${esc(c.name)}</span>`, a.length-s.length, s.length, money(sum(s,i=>i.sale.price)), money(sum(s,i=>i.sale.price)-sum(s,i=>i.cost))]; }).filter(Boolean), [1,2,3,4]);
+
+  $('#tblOrigin').innerHTML = table(['Origen','Stock','Vendidos','Ingreso','Utilidad'],
+    [...group(I,i=>i.artistOrigin||'Sin origen')].map(([k,a])=>{ const s=a.filter(i=>i.status==='sold');
+      return [esc(k), a.length-s.length, s.length, money(sum(s,i=>i.sale.price)), money(sum(s,i=>i.sale.price)-sum(s,i=>i.cost))]; })
+      .sort((x,y)=>(x[0]==='Sin origen')-(y[0]==='Sin origen') || (y[1]+y[2])-(x[1]+x[2])), [1,2,3,4]);
 
   $('#tblLot').innerHTML = table(['Lote','Discos','Costo','Vendidos','Ingreso','Recuperado'],
     [...group(I,i=>i.lot||'Sin lote')].map(([k,a])=>{ const s=a.filter(i=>i.status==='sold'), c=sum(a,i=>i.cost), r=sum(s,i=>i.sale.price);
@@ -1622,8 +1707,8 @@ $('#impJson').addEventListener('change', async e=>{
 });
 function csv(rows){ return '﻿' + rows.map(r=>r.map(v=>{ const s=String(v??''); return /[",\n;]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; }).join(',')).join('\n'); }
 $('#expInvCsv').onclick = ()=>{
-  const rows = [['Artista','Álbum','Año','Formato','País','Sello','Catálogo','Código','Categoría','Disco','Portada','Obi','Costo','Precio','Lote','Proveedor','Fecha compra','Estado','Discogs','Notas']];
-  state.items.forEach(i=>rows.push([i.artist,i.album,i.year,i.format,i.country,i.label,i.catno,i.barcode,catOf(i.category).name,i.media,i.sleeve,i.obi?'Sí':'No',i.cost,i.price,i.lot,i.supplier,i.purchasedAt,i.status==='sold'?'Vendido':'En stock',i.releaseId?`https://www.discogs.com/release/${i.releaseId}`:'',i.notes]));
+  const rows = [['Artista','Origen artista','Álbum','Año','Formato','País edición','Sello','Catálogo','Código','Categoría','Disco','Portada','Obi','Costo','Precio','Lote','Proveedor','Fecha compra','Estado','Discogs','Notas']];
+  state.items.forEach(i=>rows.push([i.artist,i.artistOrigin||'',i.album,i.year,i.format,i.country,i.label,i.catno,i.barcode,catOf(i.category).name,i.media,i.sleeve,i.obi?'Sí':'No',i.cost,i.price,i.lot,i.supplier,i.purchasedAt,i.status==='sold'?'Vendido':'En stock',i.releaseId?`https://www.discogs.com/release/${i.releaseId}`:'',i.notes]));
   download(`noriko-inventario-${today()}.csv`, csv(rows), 'text/csv;charset=utf-8');
 };
 $('#expSalesCsv').onclick = ()=>{
@@ -1791,8 +1876,10 @@ $('#quickForm').addEventListener('submit', e=>{
 
 // Resumen del pop-up
 let sumText = '';
+let sumEventId = null;
 function openSummary(id){
   const ev = state.events.find(e=>e.id===id); if(!ev) return;
+  sumEventId = id; $('#sumDelete').hidden = state.activeEventId===id;
   const sales = eventSales(ev);
   const total = sales.reduce((x,i)=>x+num(i.sale.price),0), cost = sales.reduce((x,i)=>x+num(i.cost),0);
   const avg = sales.length ? total/sales.length : 0;
@@ -1800,6 +1887,7 @@ function openSummary(id){
   const groupBy = f => { const m=new Map(); sales.forEach(i=>{ const k=f(i); const g=m.get(k)||{n:0,t:0}; g.n++; g.t+=num(i.sale.price); m.set(k,g); }); return [...m].sort((a,b)=>b[1].t-a[1].t || b[1].n-a[1].n); };
   const pays = groupBy(i=>i.sale.method||'—');
   const cats = groupBy(i=>i.category);
+  const origins = groupBy(i=>i.artistOrigin||'Sin origen').sort((a,b)=>(a[0]==='Sin origen')-(b[0]==='Sin origen'));
   const styles = (()=>{ const m=new Map(); sales.forEach(i=>(i.styles&&i.styles.length?i.styles:['Sin género']).forEach(st=>m.set(st,(m.get(st)||0)+1))); return [...m].sort((a,b)=>(a[0]==='Sin género')-(b[0]==='Sin género') || b[1]-a[1]).slice(0,5); })();
   const top = [...sales].sort((a,b)=>num(b.sale.price)-num(a.sale.price))[0];
   const rows = (list, label) => list.map(([k,g])=>`<tr><td>${label(k)}<div class="bar"><i style="width:${pct(g.t)}%"></i></div></td><td class="n">${g.n}</td><td class="n">${money(g.t)}</td><td class="n">${pct(g.t)}%</td></tr>`).join('');
@@ -1818,6 +1906,8 @@ function openSummary(id){
     <div class="tbl-wrap"><table><thead><tr><th>Método</th><th class="n">Discos</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>${rows(pays, k=>esc(k))}</tbody></table></div>
     <h3>Por categoría</h3>
     <div class="tbl-wrap"><table><thead><tr><th>Categoría</th><th class="n">Discos</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>${rows(cats, k=>`<span class="chip ${catOf(k).cls}">${esc(catOf(k).name)}</span>`)}</tbody></table></div>
+    <h3>Por origen del artista</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>Origen</th><th class="n">Discos</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>${rows(origins, k=>esc(k))}</tbody></table></div>
     <h3>Géneros más vendidos</h3>
     <div class="small">${styles.map(([k,n])=>`<span class="chip" style="margin-bottom:6px">${esc(k)} · ${n}</span>`).join(' ')}</div>
     ${top?`<h3>Disco más caro</h3><div class="item">${thumbHtml(top.thumb)}<div class="grow"><div class="it-artist">${esc(top.artist)}</div><div class="it-title">${esc(top.album)}</div><div class="price" style="margin-top:4px">${money(top.sale.price)}</div></div></div>`:''}
@@ -1826,10 +1916,26 @@ function openSummary(id){
   sumText = [`${ev.name} · ${fmtDate(ev.date)}`, `Total: ${money(total)} · ${sales.length} discos · ticket promedio ${money(avg)} · utilidad ${money(total-cost)}`,
     'Pago: ' + pays.map(([k,g])=>`${k} ${money(g.t)} (${g.n})`).join(' · '),
     'Categorías: ' + cats.map(([k,g])=>`${catOf(k).name} ${money(g.t)} (${pct(g.t)}%)`).join(' · '),
+    'Origen: ' + origins.map(([k,g])=>`${k} ${money(g.t)} (${g.n})`).join(' · '),
     'Géneros: ' + styles.map(([k,n])=>`${k} ${n}`).join(' · '),
     top ? `Más caro: ${top.artist} – ${top.album} (${money(top.sale.price)})` : ''].filter(Boolean).join('\n');
   $('#sumDlg').showModal();
 }
+$('#sumDelete').addEventListener('click', async ()=>{
+  const ev = state.events.find(e=>e.id===sumEventId); if(!ev) return;
+  const sales = eventSales(ev);
+  $('#sumDlg').close();
+  const msg = sales.length
+    ? `Se borra “${ev.name}” y se anulan sus ${sales.length} ${sales.length===1?'venta':'ventas'}: esos discos regresan a tu stock${syncOn()?' y a tu colección de Discogs':''}. No se puede deshacer.`
+    : `Se borra “${ev.name}”. No tenía ventas.`;
+  if(!(await confirmBox('Borrar evento', msg))) return;
+  sales.forEach(i=>{ i.sale = null; i.status = 'stock'; touch(i); });
+  state.events = state.events.filter(e=>e.id!==ev.id); markDeleted('Eventos', ev.id, ev._synced);
+  if(state.activeEventId===ev.id) state.activeEventId = null;
+  save(); renderAll(); renderPop();
+  toast(sales.length ? `Evento borrado · ${sales.length} ${sales.length===1?'disco regresó':'discos regresaron'} al stock` : 'Evento borrado');
+  if(syncOn() && sales.length) setTimeout(()=>syncItems(sales), 800);
+});
 $('#sumCopy').addEventListener('click', async ()=>{
   try{ await navigator.clipboard.writeText(sumText); toast('Resumen copiado'); }
   catch(e){ toast('No se pudo copiar en este navegador', true); }
