@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="NORiKO Inv">
 <title>NORiKO Records · Inventario</title>
+<link rel="apple-touch-icon" href="icono-noriko.png">
+<link rel="icon" type="image/png" href="icono-noriko.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,500;0,700;0,900;1,900&family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
@@ -140,10 +142,11 @@
   .live-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
   .live-kpis div{background:var(--paper);border:1.5px solid var(--ink);border-radius:10px;padding:8px 6px;text-align:center}
   .live-kpis b{display:block;font-size:18px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .live-kpis span{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700}
+  .live-kpis span{display:block;line-height:1.2;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700}
   .big-btn{padding:15px 16px;font-size:17px}
   .big-input{font-size:30px!important;font-weight:900!important;padding:10px 14px!important}
-  .paygrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .paygrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .paygrid button{padding:14px 4px!important;font-size:15px!important}
   .paygrid button{border:1.5px solid var(--ink);background:#fff;border-radius:10px;padding:14px 8px;font-weight:700;font-size:16px;cursor:pointer}
   .paygrid button.on{background:var(--ink);color:var(--cream)}
   .bar{height:8px;border-radius:4px;background:#e6dccb;overflow:hidden;margin-top:4px}
@@ -361,11 +364,16 @@
           <input type="number" id="setDefPrice" min="0" step="10">
         </div>
       </div>
+      <label class="f">Comisión de Mercado Pago (%, con IVA)</label>
+      <input type="number" id="setMpFee" min="0" max="20" step="0.01" inputmode="decimal">
+      <div class="small muted" style="margin-top:4px">Se descuenta de cada venta cobrada con Mercado Pago para calcular lo que te llega. Cambiarla no modifica ventas ya registradas.</div>
       <div class="row" style="margin-top:12px">
         <button class="btn primary grow" id="saveSettings">Guardar</button>
         <button class="btn" id="testToken">Probar conexión</button>
       </div>
       <div id="testResult" class="small" style="margin-top:8px"></div>
+      <button class="btn block" type="button" id="coversBtn" style="margin-top:12px" hidden></button>
+      <div id="coversResult" class="small" style="margin-top:8px"></div>
     </div>
 
     <div class="card">
@@ -537,6 +545,7 @@
       <div class="small muted" id="qkListPrice"></div>
       <label class="f">¿Cómo paga?</label>
       <div class="paygrid" id="qkPay"></div>
+      <div class="small" id="qkFee" style="margin-top:8px"></div>
     </div>
     <div class="dlg-foot">
       <button type="button" class="btn grow big-btn" id="qkCancel">Cancelar</button>
@@ -616,13 +625,19 @@ const CATS = [
   {id:'rare',  name:'Rareza · レア',     cls:'cat-rare'},
 ];
 const CONDS = ['M','NM','VG+','VG','G+','G','P'];
-const PAYS  = ['Efectivo','Mercado Pago','Tarjeta','Transferencia'];
+const PAYS  = ['Efectivo','Mercado Pago','Transferencia'];
+// Comisión de Mercado Pago: se guarda en cada venta al registrarla, para que cambiar el % después no altere ventas pasadas.
+const mpRate = () => num(state.settings.mpFee ?? 4.6) / 100;
+const feeFor = (method, price) => method==='Mercado Pago' ? Math.round(num(price) * mpRate() * 100) / 100 : 0;
+const feeOf = i => i.sale ? num(i.sale.fee) : 0;
+const netOf = i => i.sale ? num(i.sale.price) - feeOf(i) : 0;
+const profitOf = i => netOf(i) - num(i.cost);
 const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-const APP_VERSION = 'v6 · 23 nov 2026';
-function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null, cloud:{url:'', key:'', lastSync:null, sheetUrl:'', deleted:[]}}; }
+const APP_VERSION = 'v8.1 · 24 nov 2026';
+function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, mpFee:4.6, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null, cloud:{url:'', key:'', lastSync:null, sheetUrl:'', deleted:[]}}; }
 function load(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
@@ -646,7 +661,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 const today = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
 const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
-const fmt = (n, cur='MXN') => new Intl.NumberFormat('es-MX',{style:'currency',currency:cur,maximumFractionDigits: cur==='JPY'?0:2, minimumFractionDigits:0}).format(n||0);
+const fmt = (n, cur='MXN') => { const whole = cur==='JPY' || Number.isInteger(Math.round((n||0)*100)/100); return new Intl.NumberFormat('es-MX',{style:'currency',currency:cur,maximumFractionDigits: whole?0:2, minimumFractionDigits: whole?0:2}).format(n||0); };
 const money = n => fmt(n,'MXN');
 const digits = s => String(s||'').replace(/\D/g,'');
 const catOf = id => CATS.find(c=>c.id===id) || CATS[0];
@@ -747,6 +762,7 @@ function parseResult(x){
     catno: x.catno && x.catno!=='none' ? x.catno : '',
     barcode: (x.barcode||[]).map(digits).find(b=>b.length>=8) || '',
     thumb: x.thumb || x.cover_image || '',
+    cover: x.cover_image || '',
     styles: ((x.style&&x.style.length)?x.style:(x.genre||[])).slice(0,3),
     country_jp: x.country==='Japan',
   };
@@ -798,10 +814,10 @@ function toRow(i){
     'Catálogo':i.catno, 'Código':i.barcode, 'Categoría':catOf(i.category).name, 'Géneros':(i.styles||[]).join(', '),
     Disco:i.media, Portada:i.sleeve, Obi:i.obi?'Sí':'No', Costo:num(i.cost), Precio:num(i.price), Lote:i.lot, Proveedor:i.supplier,
     'Fecha compra':i.purchasedAt, Estado:i.status==='sold'?'Vendido':'En stock',
-    'Precio venta':i.sale?num(s.price):'', 'Fecha venta':s.date||'', Pago:s.method||'', Canal:s.channel||'', Evento:s.event||'',
+    'Precio venta':i.sale?num(s.price):'', 'Comisión':i.sale?feeOf(i):'', 'Fecha venta':s.date||'', Pago:s.method||'', Canal:s.channel||'', Evento:s.event||'',
     'ID evento':s.eventId||'', Comprador:s.buyer||'', 'Notas venta':s.notes||'', 'Venta registrada':s.at||'',
     Notas:i.notes, 'Discogs release':i.releaseId||'', 'Discogs instancia':i.dgInstance||'', 'Discogs carpeta':i.dgFolder||'',
-    'Discogs usuario':i.dgUser||'', 'Discogs estado':i.dgSync||'', Imagen:i.thumb||'', Creado:i.createdAt||'', Actualizado:i.updatedAt||''};
+    'Discogs usuario':i.dgUser||'', 'Discogs estado':i.dgSync||'', Imagen:i.thumb||'', 'Imagen grande':i.cover||'', Creado:i.createdAt||'', Actualizado:i.updatedAt||''};
 }
 function fromRow(r){
   const c = str(r['Categoría']).toLowerCase();
@@ -819,7 +835,9 @@ function fromRow(r){
     releaseId:n(r['Discogs release']), dgInstance:n(r['Discogs instancia']), dgFolder:n(r['Discogs carpeta']),
     dgUser:str(r['Discogs usuario']), dgSync:str(r['Discogs estado'])||null, thumb:str(r.Imagen),
     createdAt:str(r.Creado), updatedAt:str(r.Actualizado)};
-  if('Origen artista' in r) o.artistOrigin = str(r['Origen artista']);   // si la hoja aún no tiene la columna, conserva el dato local
+  if('Origen artista' in r) o.artistOrigin = str(r['Origen artista']);
+  if('Imagen grande' in r) o.cover = str(r['Imagen grande']);
+  if(o.sale && 'Comisión' in r) o.sale.fee = num(r['Comisión']);   // si la hoja aún no tiene la columna, conserva el dato local
   return o;
 }
 const evToRow = e => ({ID:e.id, Nombre:e.name, Fecha:e.date, Abierto:e.openedAt||'', Cerrado:e.closedAt||'', Actualizado:e.updatedAt||''});
@@ -1282,7 +1300,7 @@ $('#lotForm').addEventListener('submit', e=>{
 });
 function lotItem(rel){
   const L = state.lotMode;
-  return {id:uid(), releaseId:rel.releaseId||null, label:rel.label||'', thumb:rel.thumb||'', styles:rel.styles||[],
+  return {id:uid(), releaseId:rel.releaseId||null, label:rel.label||'', thumb:rel.thumb||'', cover:rel.cover||'', styles:rel.styles||[],
     artist:rel.artist||'', artistOrigin:knownOrigin(rel.artist), album:rel.album||'', year:rel.year||'', format:rel.format||'CD', country:rel.country||'',
     catno:rel.catno||'', barcode:digits(rel.barcode||''), category: L.category==='auto' ? autoCat(rel.country) : L.category,
     media:L.media, sleeve:L.sleeve, obi:false, cost:num(L.cost), price:num(L.price), lot:L.lot, supplier:L.supplier,
@@ -1384,7 +1402,7 @@ $('#buyForm').addEventListener('submit', e=>{
     const qty = Math.max(1, Math.min(200, parseInt($('#bQty').value)||1));
     const added = [];
     for(let k=0;k<qty;k++){
-      const it = {id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'', styles: buyDraft.styles||[],
+      const it = {id:uid(), releaseId: buyDraft.releaseId||null, label: buyDraft.label||'', thumb: buyDraft.thumb||'', cover: buyDraft.cover||'', styles: buyDraft.styles||[],
         ...base, status:'stock', sale:null, dgInstance:null, dgSync:null, createdAt:new Date().toISOString()};
       touch(it); state.items.push(it); added.push(it);
     }
@@ -1431,7 +1449,8 @@ function openSell(id){
   $('#sDate').value = s.date || today();
   sPay = s.method || (prev && prev.sale.method) || PAYS[0];
   sChan = s.channel || (prev && prev.sale.channel) || CHANS[0];
-  pills($('#sPayPills'), PAYS, sPay, v=>sPay=v);
+  if(!PAYS.includes(sPay)) sPay = 'Mercado Pago';   // ventas viejas con “Tarjeta”
+  pills($('#sPayPills'), PAYS, sPay, v=>{ sPay=v; updProfit(); });
   pills($('#sChanPills'), CHANS, sChan, v=>sChan=v);
   const aev = activeEvent();
   if(!it.sale && aev){ sChan = 'Pop-up'; pills($('#sChanPills'), CHANS, sChan, v=>sChan=v); $('#sDate').value = aev.date; }
@@ -1451,8 +1470,9 @@ function openSell(id){
 }
 function updProfit(){
   const it = state.items.find(i=>i.id===sellingId); if(!it) return;
-  const p = num($('#sPrice').value), g = p - num(it.cost);
-  $('#sProfit').innerHTML = `Costo ${money(it.cost)} · Utilidad <strong style="color:${g<0?'#b3170a':'var(--ok)'}">${money(g)}</strong>${it.cost>0?` (${Math.round(g/it.cost*100)}% sobre costo)`:''}`;
+  const p = num($('#sPrice').value), fee = feeFor(sPay, p), g = p - fee - num(it.cost);
+  $('#sProfit').innerHTML = (fee ? `Comisión Mercado Pago ${money(fee)} · Te llegan <strong>${money(p - fee)}</strong><br>` : '') +
+    `Costo ${money(it.cost)} · Utilidad <strong style="color:${g<0?'#b3170a':'var(--ok)'}">${money(g)}</strong>${it.cost>0?` (${Math.round(g/it.cost*100)}% sobre costo)`:''}`;
 }
 $('#sPrice').addEventListener('input', updProfit);
 $('#sellForm').addEventListener('submit', e=>{
@@ -1461,6 +1481,7 @@ $('#sellForm').addEventListener('submit', e=>{
   it.sale = {price:num($('#sPrice').value), date:$('#sDate').value||today(), method:sPay, channel:sChan,
     event:$('#sEvent').value.trim(), buyer:$('#sBuyer').value.trim(), notes:$('#sNotes').value.trim(),
     at: (it.sale && it.sale.at) || new Date().toISOString()};
+  it.sale.fee = feeFor(sPay, it.sale.price);
   it.sale.eventId = it.sale.event ? eventIdFor(it.sale.event) : null;
   it.status = 'sold'; touch(it);
   save(); $('#sellDlg').close(); renderAll();
@@ -1552,8 +1573,8 @@ function renderSales(){
   if(!list.length){ $('#salesList').innerHTML = `<div class="empty">Todavía no registras ventas.</div>`; return; }
   const groups = {};
   list.forEach(i=>{ (groups[i.sale.date] = groups[i.sale.date] || []).push(i); });
-  const tot = list.reduce((s,i)=>s+num(i.sale.price),0), prof = list.reduce((s,i)=>s+num(i.sale.price)-num(i.cost),0);
-  $('#salesList').innerHTML = `<div class="summary-line">${list.length} ${list.length===1?'venta':'ventas'} · ingreso ${money(tot)} · utilidad ${money(prof)}</div>` +
+  const tot = list.reduce((s,i)=>s+num(i.sale.price),0), prof = list.reduce((s,i)=>s+profitOf(i),0), fees = list.reduce((s,i)=>s+feeOf(i),0);
+  $('#salesList').innerHTML = `<div class="summary-line">${list.length} ${list.length===1?'venta':'ventas'} · ingreso ${money(tot)}${fees?` · comisión MP ${money(fees)}`:''} · utilidad ${money(prof)}</div>` +
     Object.keys(groups).sort().reverse().map(d=>{
       const g = groups[d], t = g.reduce((s,i)=>s+num(i.sale.price),0);
       return `<div class="sale-group"><h3><span>${esc(fmtDate(d))}</span><span>${g.length} · ${money(t)}</span></h3>
@@ -1561,7 +1582,7 @@ function renderSales(){
           <div class="item">${thumbHtml(i.thumb)}
             <div class="grow">
               <div class="row" style="align-items:flex-start"><div class="grow"><div class="it-artist">${esc(i.artist)}</div><div class="it-title">${esc(i.album)}</div></div><div class="price">${money(i.sale.price)}</div></div>
-              <div class="it-meta">${[i.sale.method, i.sale.channel, i.sale.event, i.sale.buyer].filter(Boolean).map(esc).join(' · ')}<br>Utilidad ${money(num(i.sale.price)-num(i.cost))}</div>
+              <div class="it-meta">${[i.sale.method, i.sale.channel, i.sale.event, i.sale.buyer].filter(Boolean).map(esc).join(' · ')}<br>${feeOf(i)?`Comisión ${money(feeOf(i))} · `:''}Utilidad ${money(profitOf(i))}</div>
               <div class="it-actions"><button class="btn sm" data-sell="${i.id}">Editar venta</button></div>
             </div></div>`).join('')}</div></div>`;
     }).join('');
@@ -1579,26 +1600,26 @@ function renderStats(){
   const I = state.items, stock = I.filter(i=>i.status==='stock'), sold = I.filter(i=>i.status==='sold');
   const sum = (a,f)=>a.reduce((s,i)=>s+num(f(i)),0);
   const invested = sum(I,i=>i.cost), stockCost = sum(stock,i=>i.cost), stockList = sum(stock,i=>i.price);
-  const revenue = sum(sold,i=>i.sale.price), soldCost = sum(sold,i=>i.cost), profit = revenue - soldCost;
-  const recovered = invested ? Math.round(revenue/invested*100) : 0;
+  const revenue = sum(sold,i=>i.sale.price), soldCost = sum(sold,i=>i.cost), fees = sold.reduce((s,i)=>s+feeOf(i),0), profit = revenue - fees - soldCost;
+  const recovered = invested ? Math.round((revenue - fees)/invested*100) : 0;
   $('#kpis').innerHTML = [
     ['Discos en stock', stock.length, `costo ${money(stockCost)}`, ''],
     ['Valor de lista en stock', money(stockList), 'si se vende todo a precio de lista', ''],
     ['Vendidos', sold.length, `ticket prom. ${money(sold.length?revenue/sold.length:0)}`, ''],
-    ['Ingreso por ventas', money(revenue), `costo de lo vendido ${money(soldCost)}`, 'blue'],
+    ['Ingreso por ventas', money(revenue), fees ? `comisión MP ${money(fees)} · costo ${money(soldCost)}` : `costo de lo vendido ${money(soldCost)}`, 'blue'],
     ['Utilidad bruta', money(profit), soldCost?`${Math.round(profit/soldCost*100)}% sobre costo`:'—', ''],
-    ['Inversión recuperada', recovered+'%', `${money(revenue)} de ${money(invested)} invertidos`, ''],
+    ['Inversión recuperada', recovered+'%', `${money(revenue - fees)} de ${money(invested)} invertidos`, ''],
   ].map(([k,v,s,c])=>`<div class="kpi ${c}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s)}</div></div>`).join('');
 
   const group = (arr, keyFn) => { const m = new Map(); arr.forEach(i=>{ const k=keyFn(i); if(!m.has(k)) m.set(k,[]); m.get(k).push(i); }); return m; };
 
   $('#tblCat').innerHTML = table(['Categoría','Stock','Vendidos','Ingreso','Utilidad'],
     CATS.map(c=>{ const a=I.filter(i=>i.category===c.id); if(!a.length) return null;
-      const s=a.filter(i=>i.status==='sold'); return [`<span class="chip ${c.cls}">${esc(c.name)}</span>`, a.length-s.length, s.length, money(sum(s,i=>i.sale.price)), money(sum(s,i=>i.sale.price)-sum(s,i=>i.cost))]; }).filter(Boolean), [1,2,3,4]);
+      const s=a.filter(i=>i.status==='sold'); return [`<span class="chip ${c.cls}">${esc(c.name)}</span>`, a.length-s.length, s.length, money(sum(s,i=>i.sale.price)), money(s.reduce((x,i)=>x+profitOf(i),0))]; }).filter(Boolean), [1,2,3,4]);
 
   $('#tblOrigin').innerHTML = table(['Origen','Stock','Vendidos','Ingreso','Utilidad'],
     [...group(I,i=>i.artistOrigin||'Sin origen')].map(([k,a])=>{ const s=a.filter(i=>i.status==='sold');
-      return [esc(k), a.length-s.length, s.length, money(sum(s,i=>i.sale.price)), money(sum(s,i=>i.sale.price)-sum(s,i=>i.cost))]; })
+      return [esc(k), a.length-s.length, s.length, money(sum(s,i=>i.sale.price)), money(s.reduce((x,i)=>x+profitOf(i),0))]; })
       .sort((x,y)=>(x[0]==='Sin origen')-(y[0]==='Sin origen') || (y[1]+y[2])-(x[1]+x[2])), [1,2,3,4]);
 
   $('#tblLot').innerHTML = table(['Lote','Discos','Costo','Vendidos','Ingreso','Recuperado'],
@@ -1606,19 +1627,47 @@ function renderStats(){
       return [esc(k), a.length, money(c), s.length, money(r), c?Math.round(r/c*100)+'%':'—']; }).sort((x,y)=>y[1]-x[1]), [1,2,3,4,5]);
 
   $('#tblEvent').innerHTML = table(['Evento','Ventas','Ingreso','Utilidad'],
-    [...group(sold,i=>i.sale.event||'Sin evento')].map(([k,a])=>[esc(k), a.length, money(sum(a,i=>i.sale.price)), money(sum(a,i=>i.sale.price)-sum(a,i=>i.cost))]), [1,2,3]);
+    [...group(sold,i=>i.sale.event||'Sin evento')].map(([k,a])=>[esc(k), a.length, money(sum(a,i=>i.sale.price)), money(a.reduce((x,i)=>x+profitOf(i),0))]), [1,2,3]);
 
   $('#tblPay').innerHTML = table(['Método','Ventas','Ingreso'],
     [...group(sold,i=>i.sale.method||'—')].map(([k,a])=>[esc(k), a.length, money(sum(a,i=>i.sale.price))]), [1,2]);
 }
+
+/* ---------- Portadas grandes para el sitio ---------- */
+const missingCovers = () => state.items.filter(i=>i.releaseId && !i.cover && i.status==='stock');
+function renderCovers(){
+  const n = missingCovers().length, b = $('#coversBtn');
+  b.hidden = !n || !state.settings.token;
+  b.textContent = `Completar portadas grandes para el sitio (${n})`;
+}
+$('#coversBtn').addEventListener('click', async ()=>{
+  const list = missingCovers(); if(!list.length) return;
+  const b = $('#coversBtn'); b.disabled = true;
+  let ok = 0, fail = 0;
+  for(let k=0; k<list.length; k++){
+    const it = list[k];
+    $('#coversResult').innerHTML = `<span class="spinner"></span> ${k+1} de ${list.length}: ${esc(it.artist)} – ${esc(it.album)}`;
+    try{
+      const r = await dg('/releases/' + it.releaseId);
+      const imgs = (r && r.images) || [], im = imgs.find(x=>x.type==='primary') || imgs[0];
+      if(im && (im.uri || im.resource_url)){ it.cover = im.uri || im.resource_url; touch(it); ok++; } else fail++;
+    }catch(e){ fail++; if(/límite/.test(e.message)) await sleep(30000); }
+    saveLocal();
+    await sleep(1100);              // Discogs permite ~60 consultas por minuto
+  }
+  save(); b.disabled = false; renderCovers();
+  $('#coversResult').innerHTML = `<span style="color:var(--ok)">✓ ${ok} portadas listas.</span>${fail?` ${fail} discos no tienen imagen en Discogs.`:''}`;
+});
 
 /* ---------- Ajustes y respaldo ---------- */
 function renderSettings(){
   $('#setToken').value = state.settings.token||'';
   $('#setCurrency').value = state.settings.currency||'MXN';
   $('#setDefPrice').value = state.settings.defPrice ?? '';
+  $('#setMpFee').value = state.settings.mpFee ?? 4.6;
   $('#lastBackup').textContent = state.lastBackup ? `Último respaldo: ${new Date(state.lastBackup).toLocaleString('es-MX')}` : 'Aún no descargas ningún respaldo.';
   $('#appVersion').textContent = APP_VERSION;
+  renderCovers();
   renderSync(); renderCloud();
 }
 function renderSync(){
@@ -1676,6 +1725,7 @@ $('#saveSettings').onclick = ()=>{
   state.settings.token = $('#setToken').value.trim();
   state.settings.currency = $('#setCurrency').value;
   state.settings.defPrice = num($('#setDefPrice').value);
+  state.settings.mpFee = $('#setMpFee').value==='' ? 4.6 : num($('#setMpFee').value);
   save(); renderHeader(); toast('Ajustes guardados');
   if(state.settings.sync) connectCollection();
 };
@@ -1712,8 +1762,8 @@ $('#expInvCsv').onclick = ()=>{
   download(`noriko-inventario-${today()}.csv`, csv(rows), 'text/csv;charset=utf-8');
 };
 $('#expSalesCsv').onclick = ()=>{
-  const rows = [['Fecha','Artista','Álbum','Categoría','Precio','Costo','Utilidad','Método','Canal','Evento','Comprador','Lote','Notas']];
-  state.items.filter(i=>i.sale).sort((a,b)=>a.sale.date.localeCompare(b.sale.date)).forEach(i=>rows.push([i.sale.date,i.artist,i.album,catOf(i.category).name,i.sale.price,i.cost,num(i.sale.price)-num(i.cost),i.sale.method,i.sale.channel,i.sale.event,i.sale.buyer,i.lot,i.sale.notes]));
+  const rows = [['Fecha','Artista','Álbum','Categoría','Precio','Comisión','Neto','Costo','Utilidad','Método','Canal','Evento','Comprador','Lote','Notas']];
+  state.items.filter(i=>i.sale).sort((a,b)=>a.sale.date.localeCompare(b.sale.date)).forEach(i=>rows.push([i.sale.date,i.artist,i.album,catOf(i.category).name,i.sale.price,feeOf(i),netOf(i),i.cost,profitOf(i),i.sale.method,i.sale.channel,i.sale.event,i.sale.buyer,i.lot,i.sale.notes]));
   download(`noriko-ventas-${today()}.csv`, csv(rows), 'text/csv;charset=utf-8');
 };
 $('#wipeBtn').onclick = async ()=>{
@@ -1754,12 +1804,12 @@ function renderPop(){
   $('#popLiveName').textContent = `${ev.name} · ${fmtDate(ev.date)}`;
   const sales = eventSales(ev), total = sales.reduce((x,i)=>x+num(i.sale.price),0);
   const by = m => sales.filter(i=>i.sale.method===m).reduce((x,i)=>x+num(i.sale.price),0);
-  const other = total - by('Efectivo') - by('Mercado Pago');
+  const mpFees = sales.reduce((x,i)=>x+feeOf(i),0);
   $('#popKpis').innerHTML = `
-    <div><b>${sales.length}</b><span>Discos</span></div>
-    <div><b>${money(total)}</b><span>Total</span></div>
+    <div><b>${money(total)}</b><span>${sales.length} ${sales.length===1?'disco':'discos'}</span></div>
     <div><b>${money(by('Efectivo'))}</b><span>Efectivo</span></div>
-    <div><b>${money(by('Mercado Pago') + other)}</b><span>${other?'MP y otros':'Mercado Pago'}</span></div>`;
+    <div><b>${money(by('Mercado Pago'))}</b><span>${mpFees ? `MP · neto ${money(by('Mercado Pago') - mpFees)}` : 'Mercado Pago'}</span></div>
+    <div><b>${money(by('Transferencia'))}</b><span>Transferencia</span></div>`;
   $('#popSalesTitle').hidden = !sales.length;
   $('#popSales').innerHTML = sales.map(i=>`
     <div class="item">${thumbHtml(i.thumb)}
@@ -1852,7 +1902,12 @@ function openQuickSell(id){
   updQk();
   $('#quickDlg').showModal();
 }
-function updQk(){ $('#qkSold').disabled = !qkPay || $('#qkPrice').value===''; $('#qkSold').textContent = qkPay ? `Vendido · ${money(num($('#qkPrice').value))}` : 'Elige cómo paga'; }
+function updQk(){
+  const p = num($('#qkPrice').value), fee = feeFor(qkPay, p);
+  $('#qkSold').disabled = !qkPay || $('#qkPrice').value==='';
+  $('#qkSold').textContent = qkPay ? `Vendido · ${money(p)}` : 'Elige cómo paga';
+  $('#qkFee').innerHTML = fee ? `Comisión Mercado Pago (${(mpRate()*100).toLocaleString('es-MX')}%): ${money(fee)} · te llegan <strong>${money(p - fee)}</strong>` : '';
+}
 $('#qkPrice').addEventListener('input', updQk);
 function afterQuick(){
   const it = state.items.find(i=>i.id===qkId);
@@ -1867,6 +1922,7 @@ $('#quickForm').addEventListener('submit', e=>{
   if(!it || !ev || !qkPay) return;
   it.sale = {price:num($('#qkPrice').value), date:ev.date, method:qkPay, channel:'Pop-up', event:ev.name, eventId:ev.id,
     buyer:'', notes:'', at:new Date().toISOString()};
+  it.sale.fee = feeFor(qkPay, it.sale.price);
   it.status = 'sold'; touch(it); save();
   $('#quickDlg').close(); renderAll();
   toast(`Vendido · ${money(it.sale.price)} · ${qkPay}`);
@@ -1881,7 +1937,7 @@ function openSummary(id){
   const ev = state.events.find(e=>e.id===id); if(!ev) return;
   sumEventId = id; $('#sumDelete').hidden = state.activeEventId===id;
   const sales = eventSales(ev);
-  const total = sales.reduce((x,i)=>x+num(i.sale.price),0), cost = sales.reduce((x,i)=>x+num(i.cost),0);
+  const total = sales.reduce((x,i)=>x+num(i.sale.price),0), cost = sales.reduce((x,i)=>x+num(i.cost),0), fees = sales.reduce((x,i)=>x+feeOf(i),0);
   const avg = sales.length ? total/sales.length : 0;
   const pct = v => total ? Math.round(v/total*100) : 0;
   const groupBy = f => { const m=new Map(); sales.forEach(i=>{ const k=f(i); const g=m.get(k)||{n:0,t:0}; g.n++; g.t+=num(i.sale.price); m.set(k,g); }); return [...m].sort((a,b)=>b[1].t-a[1].t || b[1].n-a[1].n); };
@@ -1899,11 +1955,12 @@ function openSummary(id){
     <div class="kpis">
       <div class="kpi blue"><div class="k">Total vendido</div><div class="v">${money(total)}</div><div class="s">${sales.length} ${sales.length===1?'disco':'discos'}</div></div>
       <div class="kpi"><div class="k">Ticket promedio</div><div class="v">${money(avg)}</div></div>
-      <div class="kpi"><div class="k">Utilidad</div><div class="v">${money(total-cost)}</div><div class="s">costo ${money(cost)}</div></div>
+      <div class="kpi"><div class="k">Utilidad</div><div class="v">${money(total-fees-cost)}</div><div class="s">costo ${money(cost)}${fees?` · comisión MP ${money(fees)}`:''}</div></div>
     </div>
     ${cats.length>1?`<div class="top-note">${esc(bestCat)} fue lo que más dejó: ${pct(cats[0][1].t)}% de lo vendido.</div>`:''}
     <h3>Por forma de pago</h3>
     <div class="tbl-wrap"><table><thead><tr><th>Método</th><th class="n">Discos</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>${rows(pays, k=>esc(k))}</tbody></table></div>
+    ${fees?`<p class="small" style="margin:6px 0 0">Mercado Pago cobró ${money(fees)} de comisión: de esas ventas te llegan ${money(sales.filter(i=>i.sale.method==='Mercado Pago').reduce((x,i)=>x+netOf(i),0))}.</p>`:''}
     <h3>Por categoría</h3>
     <div class="tbl-wrap"><table><thead><tr><th>Categoría</th><th class="n">Discos</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>${rows(cats, k=>`<span class="chip ${catOf(k).cls}">${esc(catOf(k).name)}</span>`)}</tbody></table></div>
     <h3>Por origen del artista</h3>
@@ -1913,7 +1970,7 @@ function openSummary(id){
     ${top?`<h3>Disco más caro</h3><div class="item">${thumbHtml(top.thumb)}<div class="grow"><div class="it-artist">${esc(top.artist)}</div><div class="it-title">${esc(top.album)}</div><div class="price" style="margin-top:4px">${money(top.sale.price)}</div></div></div>`:''}
     <h3>Discos vendidos</h3>
     <div class="tbl-wrap"><table><tbody>${sales.map(i=>`<tr><td><strong>${esc(i.artist)}</strong> · ${esc(i.album)}</td><td class="n">${money(i.sale.price)}</td></tr>`).join('')}</tbody></table></div>`;
-  sumText = [`${ev.name} · ${fmtDate(ev.date)}`, `Total: ${money(total)} · ${sales.length} discos · ticket promedio ${money(avg)} · utilidad ${money(total-cost)}`,
+  sumText = [`${ev.name} · ${fmtDate(ev.date)}`, `Total: ${money(total)} · ${sales.length} discos · ticket promedio ${money(avg)}${fees?` · comisión MP ${money(fees)}`:''} · utilidad ${money(total-fees-cost)}`,
     'Pago: ' + pays.map(([k,g])=>`${k} ${money(g.t)} (${g.n})`).join(' · '),
     'Categorías: ' + cats.map(([k,g])=>`${catOf(k).name} ${money(g.t)} (${pct(g.t)}%)`).join(' · '),
     'Origen: ' + origins.map(([k,g])=>`${k} ${money(g.t)} (${g.n})`).join(' · '),
@@ -1979,6 +2036,14 @@ function renderAll(){
   const v = ($('.view.active')||{}).id;
   if(v==='v-pop') renderPop(); if(v==='v-inv') renderInv(); if(v==='v-sales') renderSales(); if(v==='v-stats') renderStats();
 }
+// Ventas registradas antes de v8: “Tarjeta” pasa a Mercado Pago (se cobraba por ahí) y se calcula su comisión.
+(function migrateFees(){
+  let n = 0;
+  state.items.forEach(i=>{ if(!i.sale || i.sale.fee !== undefined) return;
+    if(i.sale.method==='Tarjeta') i.sale.method = 'Mercado Pago';
+    i.sale.fee = feeFor(i.sale.method, i.sale.price); touch(i); n++; });
+  if(n) saveLocal();
+})();
 if(activeEvent()) show('v-pop'); else { renderAll(); renderLotBox(); }
 if(cloudOn()) setTimeout(cloudSync, 300);
 })();
