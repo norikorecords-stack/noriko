@@ -154,6 +154,7 @@
   .top-note{background:var(--orange);color:var(--ink);border:1.5px solid var(--ink);border-radius:10px;padding:10px 12px;font-weight:700;margin:12px 0}
   .past{display:flex;align-items:center;gap:10px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px}
   .ev-pills{margin:6px 0 0}
+  h4.sub{font-size:15px;font-weight:700;margin:20px 0 6px;padding-top:16px;border-top:1.5px dashed var(--line)}
   .origin-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
   .origin-row .small{line-height:1.2}
   #popResults{scroll-margin-top:96px}
@@ -345,22 +346,6 @@
   <section class="view" id="v-set">
     <h2>Ajustes</h2>
     <div class="card">
-      <h3 class="mt0">Cobros y precios</h3>
-      <div class="grid2">
-        <div>
-          <label class="f">Precio de venta por defecto</label>
-          <input type="number" id="setDefPrice" min="0" step="10" inputmode="decimal">
-        </div>
-        <div>
-          <label class="f">Comisión Mercado Pago (%)</label>
-          <input type="number" id="setMpFee" min="0" max="20" step="0.01" inputmode="decimal">
-        </div>
-      </div>
-      <div class="small muted" style="margin-top:6px">El precio por defecto se propone al agregar un disco. La comisión (con IVA) se descuenta de cada venta cobrada con Mercado Pago; cambiarla no modifica ventas ya registradas.</div>
-      <button class="btn primary block" type="button" id="saveCobros" style="margin-top:12px">Guardar</button>
-    </div>
-
-    <div class="card">
       <h3 class="mt0">Discogs</h3>
       <p class="small muted mt0">Genera un token personal en <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">discogs.com/settings/developers</a> → “Generate new token”. Se guarda solo en este navegador.</p>
       <label class="f">Token personal</label>
@@ -368,22 +353,14 @@
         <input type="password" id="setToken" class="grow" autocomplete="off">
         <button class="btn sm" type="button" id="showToken">Ver</button>
       </div>
-      <label class="f">Moneda de los precios de referencia</label>
-      <select id="setCurrency">
-        <option>MXN</option><option>USD</option><option>JPY</option><option>EUR</option>
-      </select>
       <div class="row" style="margin-top:12px">
         <button class="btn primary grow" id="saveSettings">Guardar</button>
         <button class="btn" id="testToken">Probar conexión</button>
       </div>
       <div id="testResult" class="small" style="margin-top:8px"></div>
-      <button class="btn block" type="button" id="coversBtn" style="margin-top:12px" hidden></button>
-      <div id="coversResult" class="small" style="margin-top:8px"></div>
-    </div>
 
-    <div class="card">
-      <h3 class="mt0">Colección de Discogs</h3>
-      <p class="small muted mt0">Al registrar una compra, el disco se agrega a la colección de la cuenta dueña del token. Al venderlo, se quita. Ponerlo en venta en Discogs lo decides tú desde la web.</p>
+      <h4 class="sub">Colección</h4>
+      <p class="small muted mt0">Al agregar un disco al inventario, se agrega a la colección de la cuenta dueña del token. Al venderlo, se quita. Ponerlo en venta en Discogs lo decides tú desde la web.</p>
       <label class="check"><input type="checkbox" id="setSync"> Sincronizar con mi colección</label>
       <div id="syncBox" hidden>
         <div class="small" id="syncUser" style="margin-top:8px"></div>
@@ -395,6 +372,8 @@
         <button class="btn block" type="button" id="syncPendingBtn" style="margin-top:12px">Sincronizar pendientes</button>
         <div id="syncResult" class="small" style="margin-top:8px"></div>
       </div>
+      <button class="btn block" type="button" id="coversBtn" style="margin-top:12px" hidden></button>
+      <div id="coversResult" class="small" style="margin-top:8px"></div>
     </div>
 
     <div class="card">
@@ -413,6 +392,26 @@
         </div>
       </div>
       <div id="cloudInfo" class="small" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="mt0">Cobros y precios</h3>
+      <div class="grid2">
+        <div>
+          <label class="f">Precio de venta por defecto</label>
+          <input type="number" id="setDefPrice" min="0" step="10" inputmode="decimal">
+        </div>
+        <div>
+          <label class="f">Comisión Mercado Pago (%)</label>
+          <input type="number" id="setMpFee" min="0" max="20" step="0.01" inputmode="decimal">
+        </div>
+      </div>
+      <label class="f">Moneda de los precios de referencia de Discogs</label>
+      <select id="setCurrency">
+        <option>MXN</option><option>USD</option><option>JPY</option><option>EUR</option>
+      </select>
+      <div class="small muted" style="margin-top:6px">El precio por defecto se propone al agregar un disco. La comisión (con IVA) se descuenta de cada venta cobrada con Mercado Pago; cambiarla no modifica ventas ya registradas.</div>
+      <button class="btn primary block" type="button" id="saveCobros" style="margin-top:12px">Guardar</button>
     </div>
 
     <div class="card">
@@ -641,7 +640,7 @@ const CHANS = ['Pop-up','DM / Instagram','En línea','Otro'];
 
 /* ---------- Estado ---------- */
 let state = load();
-const APP_VERSION = 'v8.2 · 24 nov 2026';
+const APP_VERSION = 'v8.3 · 24 nov 2026';
 function blank(){ return {version:1, settings:{token:'', currency:'MXN', defPrice:180, mpFee:4.6, sync:false, username:'', folderId:1, folderName:'Uncategorized', folders:[]}, items:[], events:[], activeEventId:null, lastBackup:null, cloud:{url:'', key:'', lastSync:null, sheetUrl:'', deleted:[]}}; }
 function load(){
   try{
@@ -1736,6 +1735,7 @@ const saveSettingsFn = ()=>{
 };
 $('#saveSettings').onclick = saveSettingsFn;
 $('#saveCobros').onclick = ()=>{
+  state.settings.currency = $('#setCurrency').value;
   state.settings.defPrice = num($('#setDefPrice').value);
   state.settings.mpFee = $('#setMpFee').value==='' ? 4.6 : num($('#setMpFee').value);
   $('#setMpFee').value = state.settings.mpFee;
